@@ -66,7 +66,7 @@ export class StatisticsController {
       const taskService = (await import('../services/TaskService.js')).TaskService;
       const taskSvc = new taskService();
 
-      const completedTodayResult = await taskSvc.getCompletedTodayByUser(req.user.id);
+      const completedTodayResult = await taskSvc.getCompletedToday(req.user.id);
       const tasksCompletedToday = completedTodayResult.success ? completedTodayResult.data.length : 0;
 
       // Get total subtasks completed (historical)

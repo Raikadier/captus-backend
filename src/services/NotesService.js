@@ -66,13 +66,15 @@ export class NotesService {
       }
 
       const note = await this.repo.getById(id);
-      if (!note) {
+      if (note) {
+        if (userId && note.user_id === userId) {
+          return new OperationResult(true, "Nota encontrada.", note);
+        } else {
+          return new OperationResult(false, "Nota no accesible.");
+        }
+      } else {
         return new OperationResult(false, "Nota no encontrada.");
       }
-      if (userId && note.user_id !== userId) {
-        return new OperationResult(false, "Nota no accesible.");
-      }
-      return new OperationResult(true, "Nota encontrada.", note);
     } catch (error) {
       return new OperationResult(false, `Error al obtener nota: ${error.message}`);
     }
@@ -142,10 +144,12 @@ export class NotesService {
       if (deleted) {
         return new OperationResult(true, "Nota eliminada exitosamente.");
       } else {
+        // Esto podría pasar si la nota no se encuentra o no pertenece al usuario.
         return new OperationResult(false, "Error al eliminar la nota.");
       }
     } catch (error) {
-      return new OperationResult(false, `Error al eliminar la nota: ${error.message}`);
+      console.error(`Error inesperado en NotesService.delete: ${error.message}`);
+      throw new Error("Ocurrió un error inesperado al eliminar la nota.");
     }
   }
 }

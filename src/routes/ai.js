@@ -105,9 +105,6 @@ router.post("/chat", async (req, res) => {
     // 5. Save AI Message
     await messageRepo.create(conversationId, "bot", resultText);
 
-    // 6. Update conversation's updated_at so the sidebar orders by latest activity
-    await conversationRepo.touchUpdatedAt(conversationId);
-
     console.info("[AI/chat] response", { userId, preview: resultText.slice(0, 80), actionPerformed });
 
     return res.json({ result: resultText, conversationId, actionPerformed, data: toolData });

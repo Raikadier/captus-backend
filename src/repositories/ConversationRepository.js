@@ -59,17 +59,6 @@ class ConversationRepository extends BaseRepository {
     }
   }
 
-  async touchUpdatedAt(id) {
-    const { error } = await this.client
-      .from(this.tableName)
-      .update({ updated_at: new Date().toISOString() })
-      .eq('id', id);
-
-    if (error) {
-      console.error('Error updating conversation updated_at:', error);
-    }
-  }
-
   async getRecentByUserId(userId) {
     // Lazy cleanup: delete old conversations before fetching
     await this.deleteOldConversations(userId);

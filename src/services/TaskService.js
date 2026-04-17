@@ -4,7 +4,6 @@ import PriorityRepository from "../repositories/PriorityRepository.js";
 import CategoryRepository from "../repositories/CategoryRepository.js";
 import StatisticsRepository from "../repositories/StatisticsRepository.js";
 import { OperationResult } from "../shared/OperationResult.js";
-import { validateRequired, validateFutureDate } from "../shared/validators.js";
 import nodemailer from 'nodemailer';
 
 /**
@@ -45,9 +44,9 @@ export class TaskService {
 
     // For updates, only validate fields that are being updated
     if (!isUpdate) {
-      const titleError = validateRequired(task.title, 'título');
-      if (titleError) return new OperationResult(false, titleError);
-
+      if (!task.title || task.title.trim() === "") {
+        return new OperationResult(false, "El título de la tarea no puede estar vacío.");
+      }
       if (!task.user_id && !task.id_User) {
         return new OperationResult(false, "La tarea debe tener un usuario asignado.");
       }
@@ -55,14 +54,24 @@ export class TaskService {
         return new OperationResult(false, "La tarea debe tener una fecha límite (due_date).");
       }
     } else {
+      // For updates, user_id is required but title might not be present if only updating completion status
       if (!task.user_id && !task.id_User && !task.id_Task) {
         return new OperationResult(false, "La tarea debe tener un usuario asignado.");
       }
     }
 
-    // Validate due date is not in the past
-    const dateError = validateFutureDate(task.due_date, 'fecha límite');
-    if (dateError) return new OperationResult(false, dateError);
+    // Validate due date is not in the past - only allow today and future dates
+    if (task.due_date) {
+      const dueDate = new Date(task.due_date + 'T00:00:00'); // Ensure we compare dates only, not times
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      if (dueDate < today) {
+        // Warning: this prevents creating past tasks, which might be annoying if importing data.
+        // But keeping original logic:
+        return new OperationResult(false, "La fecha límite no puede ser anterior a hoy.");
+      }
+    }
 
     return new OperationResult(true);
   }
@@ -109,43 +118,30 @@ export class TaskService {
     return new OperationResult(true);
   }
 
-  /**
-   * Deletes a task and all its subtasks.
-   * @param {number} taskId
-   * @param {string} userId
-   * @returns {Promise<OperationResult>}
-   */
-  async delete(taskId, userId) {
+  async delete(taskId, userContext = null) {
     try {
-      if (!taskId) {
-        return new OperationResult(false, "ID de tarea inválido.");
-      }
+      const validation = this.validateTaskId(taskId);
+      if (!validation.success) return validation;
 
+      const userId = this.resolveUserId(userContext);
       const existingTask = await this.taskRepository.getById(taskId);
       if (!existingTask) {
         return new OperationResult(false, "Tarea no encontrada.");
       }
-
-      const resolvedUserId = this.resolveUserId(userId);
-      const taskOwner = existingTask.user_id || existingTask.id_User;
-      if (resolvedUserId && taskOwner !== resolvedUserId) {
+      if (!userId || existingTask.id_User !== userId) {
         return new OperationResult(false, "No tienes permiso para eliminar esta tarea.");
       }
 
-      // Delete all subtasks first
-      try {
-        const subTasks = await this.subTaskRepository.getAllByTaskId(taskId);
-        for (const subTask of subTasks) {
-          await this.subTaskRepository.delete(subTask.id_SubTask || subTask.id);
-        }
-      } catch (error) {
-        console.error("Error eliminando subtareas:", error);
+      const subTasks = await this.subTaskRepository.getAllByTaskId(taskId);
+      for (const subTask of subTasks) {
+        await this.subTaskRepository.delete(subTask.id_SubTask);
       }
 
       await this.taskRepository.delete(taskId);
       return new OperationResult(true, "Tarea eliminada exitosamente.");
     } catch (error) {
-      return new OperationResult(false, `Error al eliminar la tarea: ${error.message}`);
+      console.error(`Error inesperado en TaskService.delete: ${error.message}`);
+      return new OperationResult(false, "Ocurrió un error inesperado al eliminar la tarea.");
     }
   }
 
@@ -469,8 +465,9 @@ export class TaskService {
 
   async createAndSaveTask(title, description, endDate, priorityText, categoryText, userId) {
     try {
-      const titleError = validateRequired(title, 'título');
-      if (titleError) return new OperationResult(false, titleError);
+      if (!title || title.trim() === "") {
+        return new OperationResult(false, "El título de la tarea es requerido.");
+      }
 
       if (!userId) {
         return new OperationResult(false, "El usuario es requerido.");
@@ -523,8 +520,6 @@ export class TaskService {
     } catch (error) {
       console.error("Error obteniendo IDs de prioridad y categoría:", error);
     }
-
-    return { priorityId, categoryId };
   }
 
   async loadTaskRelations(task) {
@@ -535,7 +530,7 @@ export class TaskService {
 
       if (categoryId) {
         try {
-          task.Category = await this.categoryRepository.getById(categoryId);
+          task.Category = await this.categoryRepository.getById(task.id_Category);
         } catch (error) {
           task.Category = null;
         }
@@ -543,7 +538,7 @@ export class TaskService {
 
       if (priorityId) {
         try {
-          task.Priority = await this.priorityRepository.getById(priorityId);
+          task.Priority = await this.priorityRepository.getById(task.id_Priority);
         } catch (error) {
           task.Priority = null;
         }
@@ -604,9 +599,7 @@ export class TaskService {
         html,
       });
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`Task notification email sent for ${action} task`);
-      }
+      console.log(`Task notification email sent for ${action} task: ${task.title}`);
     } catch (error) {
       if (error?.code === 'EAUTH') {
         console.warn('Gmail authentication failed. Skipping email notification.');

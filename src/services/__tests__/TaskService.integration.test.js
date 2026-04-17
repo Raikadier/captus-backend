@@ -134,7 +134,7 @@ describe('TaskService Integration Tests', () => {
                 const result = await taskService.save(taskData, testUser);
 
                 expect(result.success).toBe(false);
-                expect(result.message).toBe('El campo "título" es requerido.');
+                expect(result.message).toBe('El título de la tarea no puede estar vacío.');
             });
 
             it('should fail to create task without user_id', async () => {
@@ -164,7 +164,7 @@ describe('TaskService Integration Tests', () => {
                 const result = await taskService.save(taskData, testUser);
 
                 expect(result.success).toBe(false);
-                expect(result.message).toBe('El campo "fecha límite" no puede ser una fecha anterior a hoy.');
+                expect(result.message).toBe('La fecha límite no puede ser anterior a hoy.');
             });
 
             it('should create task with priority and category from text', async () => {
@@ -755,7 +755,7 @@ describe('TaskService Integration Tests', () => {
             it('should return false for past due_date', () => {
                 const result = taskService.validateTask({ title: 'Task', user_id: 1, due_date: '2020-01-01' });
                 expect(result.success).toBe(false);
-                expect(result.message).toBe('El campo "fecha límite" no puede ser una fecha anterior a hoy.');
+                expect(result.message).toBe('La fecha límite no puede ser anterior a hoy.');
             });
 
             it('should validate a correct task', () => {

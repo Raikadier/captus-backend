@@ -112,7 +112,7 @@ export class StatisticsService {
       yesterday.setDate(yesterday.getDate() - 1);
 
       // Get tasks completed today
-      const completedTodayResult = await taskService.getCompletedTodayByUser(userId);
+      const completedTodayResult = await taskService.getCompletedToday(userId);
       const tasksCompletedToday = completedTodayResult.success ? completedTodayResult.data.length : 0;
 
       let streakChanged = false;

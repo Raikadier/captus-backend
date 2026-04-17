@@ -53,24 +53,26 @@ export class UserController {
   async getProfile(req, res) {
     try {
       const userId = req.params.id || req.user?.id;
-      if (!userId) return res.status(400).json({ success: false, message: 'User ID required', data: null });
+      if (!userId) return res.status(400).json({ error: 'User ID required' });
 
       const user = await this.userService.getUserById(userId);
-      res.status(200).json({ success: true, message: 'Usuario encontrado.', data: user });
+      res.status(200).json({ success: true, data: user });
     } catch (error) {
-      res.status(404).json({ success: false, message: error.message, data: null });
+      // If user not found in public table, try to sync?
+      // For now, just return error
+      res.status(404).json({ success: false, error: error.message });
     }
   }
 
   async updateProfile(req, res) {
     try {
       const userId = req.params.id || req.user?.id;
-      if (!userId) return res.status(401).json({ success: false, message: 'No autorizado.', data: null });
+      if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
       const result = await this.userService.updateUser(userId, req.body);
-      res.status(200).json({ success: true, message: 'Perfil actualizado.', data: result });
+      res.status(200).json({ success: true, data: result });
     } catch (error) {
-      res.status(400).json({ success: false, message: error.message, data: null });
+      res.status(400).json({ success: false, error: error.message });
     }
   }
 
@@ -98,9 +100,9 @@ export class UserController {
     const { email } = req.body;
     try {
       const result = await this.userService.isEmailRegistered(email);
-      res.status(200).json({ success: true, message: '', data: { registered: result.data?.registered || false } });
+      res.status(200).json({ registered: result.data?.registered || false });
     } catch (error) {
-      res.status(500).json({ success: false, message: error.message, data: { registered: false } });
+      res.status(500).json({ registered: false, error: error.message });
     }
   }
 }
