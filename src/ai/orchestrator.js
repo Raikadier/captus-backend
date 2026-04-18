@@ -38,21 +38,32 @@ const tryRunToolFromJson = async ({ content, userId }) => {
   return await executeTool({ name: parsed.tool, args, userId });
 };
 
-export const orchestrator = async ({ message, userId, intent, contextData }) => {
+const MAX_HISTORY_MESSAGES = 20;
+
+const mapHistory = (conversationHistory) =>
+  conversationHistory
+    .slice(-MAX_HISTORY_MESSAGES)
+    .map(({ role, content }) => ({
+      role: role === "bot" ? "assistant" : "user",
+      content,
+    }));
+
+export const orchestrator = async ({ message, userId, intent, contextData, conversationHistory = [] }) => {
   const started = Date.now();
   const system = buildOrchestratorSystemPrompt({ userId, intent, contextData });
+  const historyMessages = mapHistory(conversationHistory);
 
   // Conversational path (no agent/tool) -> Groq
   const replyWithGroq = async () => {
     const systemPrompt = "Te llamas Captus. Eres un asistente amable y directo. Responde de forma breve y útil.";
 
-    // Si falta la clave de Groq, caer a Together fast
     const chatClient = process.env.GROQ_API_KEY ? groq : together;
 
     const response = await chatClient.chat.completions.create({
       model: MODEL_FAST,
       messages: [
         { role: "system", content: systemPrompt },
+        ...historyMessages,
         { role: "user", content: message },
       ],
       temperature: 0.4,
@@ -61,7 +72,6 @@ export const orchestrator = async ({ message, userId, intent, contextData }) => 
     return { result: content, actionPerformed: null, data: null };
   };
 
-  // Si es conversación general, no usar tools ni Together
   if (intent === "general") {
     return await replyWithGroq();
   }
@@ -70,6 +80,7 @@ export const orchestrator = async ({ message, userId, intent, contextData }) => 
     model: MODEL_REASONING,
     messages: [
       { role: "system", content: system },
+      ...historyMessages,
       { role: "user", content: message },
     ],
     tools: toolDefinitions,

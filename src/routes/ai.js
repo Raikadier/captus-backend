@@ -81,17 +81,22 @@ router.post("/chat", async (req, res) => {
       }
     }
 
-    // 2. Save User Message
+    // 2. Fetch prior history before saving current message
+    const priorMessages = isNewConversation
+      ? []
+      : await messageRepo.getByConversationId(conversationId);
+
+    // 3. Save User Message
     await messageRepo.create(conversationId, "user", message);
 
-    // 3. Update Title if it's the first user message
+    // 4. Update Title if it's the first user message
     if (isNewConversation) {
       const title = message.slice(0, 50).trim() + (message.length > 50 ? "..." : "");
       await conversationRepo.updateTitle(conversationId, title);
     }
 
-    // 4. Get AI Response
-    const responseObj = await routerAgent(message, userId);
+    // 5. Get AI Response
+    const responseObj = await routerAgent(message, userId, priorMessages);
 
     const resultText = typeof responseObj?.result === "string"
       ? responseObj.result
@@ -102,7 +107,7 @@ router.post("/chat", async (req, res) => {
     const actionPerformed = responseObj?.actionPerformed || null;
     const toolData = responseObj?.data || null;
 
-    // 5. Save AI Message
+    // 6. Save AI Message
     await messageRepo.create(conversationId, "bot", resultText);
 
     console.info("[AI/chat] response", { userId, preview: resultText.slice(0, 80), actionPerformed });

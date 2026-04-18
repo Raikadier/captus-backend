@@ -4,7 +4,7 @@ import { orchestrator } from "./orchestrator.js";
 import { extractJson } from "./utils/json.js";
 import { fetchContextForIntent } from "./context.js";
 
-export const routerAgent = async (message, userId) => {
+export const routerAgent = async (message, userId, conversationHistory = []) => {
   const started = Date.now();
 
   // 1. Clasificación rápida con modelo 8B (Groq/Together Fast)
@@ -39,6 +39,7 @@ export const routerAgent = async (message, userId) => {
     message: `${contextPrefix} ${message}`,
     userId,
     intent,
-    contextData: dynamicContext
+    contextData: dynamicContext,
+    conversationHistory,
   });
 };
