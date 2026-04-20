@@ -1,49 +1,103 @@
+/**
+ * Prompt builders for the Captus AI pipeline.
+ *
+ * Intent taxonomy (Phase 2+):
+ *
+ *  Student intents:
+ *    tasks       → create / list / complete tasks & subtasks
+ *    notes       → create / list / edit notes
+ *    events      → create / list / edit calendar events
+ *    study       → study a document: flashcards, quiz, summary, concepts
+ *    general     → conversation, tutoring, anything else
+ *
+ *  Teacher intents:
+ *    teacher_analytics → course stats, at-risk students, submission rates
+ *    teacher_content   → create activities, rubrics, question banks, course plan
+ *    notifications     → reminders / alerts
+ */
+
+// ── Intent → context prefix ───────────────────────────────────────────────────
+
 const INTENT_CONTEXT = {
-  tasks: "[CTX_TAREAS]",
-  notes: "[CTX_NOTAS]",
-  events: "[CTX_EVENTOS]",
-  notifications: "[CTX_NOTIFICACIONES]",
-  general: "[CTX_GENERAL]",
+  tasks:             "[CTX_TAREAS]",
+  notes:             "[CTX_NOTAS]",
+  events:            "[CTX_EVENTOS]",
+  study:             "[CTX_ESTUDIO]",
+  teacher_analytics: "[CTX_ANALITICA_DOCENTE]",
+  teacher_content:   "[CTX_CONTENIDO_DOCENTE]",
+  notifications:     "[CTX_NOTIFICACIONES]",
+  general:           "[CTX_GENERAL]",
 };
 
-export const allowedIntents = ["tasks", "notes", "events", "notifications", "general"];
-
-export const buildRouterSystemPrompt = () => `
-Eres el ROUTER de Captus. Tu trabajo es clasificar la solicitud del usuario en un INTENT.
-Responde **únicamente** un JSON con este formato estricto:
-{"intent":"<intent>","reason":"<breve motivo>","context_prefix":"<prefijo>"}
-
-INTENTS VÁLIDOS:
-- tasks: crear/listar/completar/actualizar tareas o subtareas
-- notes: crear/listar/editar notas
-- events: crear/listar/editar eventos o calendario
-- notifications: recordatorios/avisos
-- general: conversación normal o tutoría sin acción
-
-context_prefix debe ser uno de: ${Object.values(INTENT_CONTEXT).join(", ")}
-Si no estás seguro, usa intent "general".
-`;
+export const allowedIntents = Object.keys(INTENT_CONTEXT);
 
 export const resolveContextPrefix = (intent) =>
   INTENT_CONTEXT[intent] || INTENT_CONTEXT.general;
 
-export const buildOrchestratorSystemPrompt = ({ userId, intent, contextData }) => {
+// ── Router prompt ─────────────────────────────────────────────────────────────
+
+export const buildRouterSystemPrompt = () => `
+Eres el ROUTER de Captus. Clasifica la solicitud del usuario en un INTENT.
+Responde ÚNICAMENTE un JSON con este formato exacto:
+{"intent":"<intent>","reason":"<breve motivo>","context_prefix":"<prefijo>"}
+
+INTENTS VÁLIDOS Y CUÁNDO USARLOS:
+- tasks: crear/listar/completar/actualizar tareas o subtareas
+- notes: crear/listar/editar notas o apuntes
+- events: crear/listar/editar eventos o calendario
+- study: estudiar un documento, crear flashcards, quiz, resumen, mapa conceptual
+- teacher_analytics: el docente consulta estadísticas, calificaciones, alumnos en
+  riesgo, tasa de entregas, promedio del grupo, rendimiento por actividad
+- teacher_content: el docente quiere crear actividades, proyectos, rúbricas,
+  banco de preguntas, plan de semestre para su curso o grupo
+- notifications: recordatorios y alertas
+- general: conversación normal, preguntas generales, tutoría sin acción específica
+
+context_prefix debe ser uno de: ${Object.values(INTENT_CONTEXT).join(", ")}
+Si no estás seguro, usa intent "general".
+`.trim();
+
+// ── Orchestrator prompt ───────────────────────────────────────────────────────
+
+export const buildOrchestratorSystemPrompt = ({
+  userId,
+  intent,
+  contextData,
+  userRole = "student",
+}) => {
   const prefix = resolveContextPrefix(intent);
-  const dataSection = contextData ? `\nDATOS ACTUALES DEL USUARIO:\n${contextData}\n` : "";
+  const dataSection = contextData
+    ? `\nDATOS ACTUALES:\n${contextData}\n`
+    : "";
+
+  const roleInstructions =
+    userRole === "teacher"
+      ? `
+MODO DOCENTE ACTIVO:
+- Tienes acceso a herramientas de analítica de curso y creación de contenido.
+- Al crear actividades o eventos, pregunta siempre para qué curso/grupo si no se especifica.
+- Para analíticas, usa los course_id que el docente mencione.
+- Puedes encadenar múltiples eventos para generar un plan de semestre.`
+      : `
+MODO ESTUDIANTE ACTIVO:
+- Ayuda al estudiante a gestionar tareas, estudiar documentos y planificar.
+- Para study_document, necesitas el contenido del documento y el tipo de material deseado.
+- Sé conciso y motivador.`;
 
   return `
-Te llamas Captus y eres el ORQUESTADOR de herramientas de Captus.
-Usuario: ${userId}
+Te llamas Captus y eres el ORQUESTADOR de herramientas académicas de Captus.
+Usuario ID: ${userId}
+Rol: ${userRole}
 Contexto: ${prefix}
 ${dataSection}
+${roleInstructions}
+
 REGLAS:
-- Usa function calling nativo solo si la intención del usuario es ejecutar una acción y tienes datos suficientes para la herramienta.
-- Si el usuario pregunta por información que YA TIENES en "DATOS ACTUALES", NO llames a la herramienta de listar. Responde directamente con esos datos.
-- Si el usuario solo conversa o pide algo informativo, responde de forma natural sin usar herramientas.
-- Pide únicamente datos obligatorios (ej: título de la tarea/evento). Campos opcionales: usa valores por defecto que las tools aceptan (descripción vacía, prioridad 1, subject/category null, type "personal", notify=false).
-- Si faltan solo campos opcionales, confirma en una línea si aplicas valores por defecto y ejecuta. Si faltan campos obligatorios, pregunta solo por esos campos concretos.
-- Nunca inventes datos. Valida IDs y fechas.
-- No devuelvas JSON de herramientas en texto plano; si no ejecutas tool responde solo texto.
-- La propiedad userId la aporta el backend, no la infieras ni la solicites.
-`;
+- Usa function calling SOLO si la intención implica ejecutar una acción con datos suficientes.
+- Si el dato ya está en DATOS ACTUALES, responde directamente SIN llamar tools de listado.
+- Para campos opcionales usa valores por defecto razonables y confirma en una línea.
+- Para campos obligatorios faltantes, pregunta solo por esos campos concretos.
+- Nunca inventes IDs ni fechas que no existan en el contexto.
+- Responde siempre en español. No devuelvas JSON de herramientas en texto plano.
+`.trim();
 };

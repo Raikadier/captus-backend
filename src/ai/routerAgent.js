@@ -1,14 +1,14 @@
-import { together, MODEL_FAST } from "./model.js";
+import { gemini, MODEL_FAST } from "./model.js";
 import { allowedIntents, buildRouterSystemPrompt, resolveContextPrefix } from "./prompts.js";
 import { orchestrator } from "./orchestrator.js";
 import { extractJson } from "./utils/json.js";
 import { fetchContextForIntent } from "./context.js";
 
-export const routerAgent = async (message, userId, conversationHistory = []) => {
+export const routerAgent = async (message, userId, conversationHistory = [], userRole = "student") => {
   const started = Date.now();
 
-  // 1. Clasificación rápida con modelo 8B (Groq/Together Fast)
-  const classification = await together.chat.completions.create({
+  // 1. Clasificación rápida con Gemini Flash
+  const classification = await gemini.chat.completions.create({
     model: MODEL_FAST,
     response_format: { type: "json_object" },
     messages: [
@@ -25,7 +25,7 @@ export const routerAgent = async (message, userId, conversationHistory = []) => 
   // 2. Pre-fetch de datos (RAG-lite)
   // Si el usuario pregunta "¿Qué tareas tengo?", traemos las tareas y las inyectamos.
   // Esto evita que el orquestador tenga que llamar a la tool "list_tasks".
-  const dynamicContext = await fetchContextForIntent(intent, userId);
+  const dynamicContext = await fetchContextForIntent(intent, userId, userRole);
   const contextPrefix = resolveContextPrefix(intent);
 
   console.info("[AI/router] classified", {
@@ -41,5 +41,6 @@ export const routerAgent = async (message, userId, conversationHistory = []) => 
     intent,
     contextData: dynamicContext,
     conversationHistory,
+    userRole,
   });
 };
