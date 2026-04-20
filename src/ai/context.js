@@ -77,7 +77,7 @@ export const fetchContextForIntent = async (intent, userId, userRole = "student"
         return (
           "CURSOS DEL DOCENTE:\n" +
           list
-            .map((c) => `- [${c.id}] ${c.name} (código: ${c.code ?? "N/A"})`)
+            .map((c) => `- [${c.id}] ${c.title} (código: ${c.invite_code ?? "N/A"})`)
             .join("\n")
         );
       }
