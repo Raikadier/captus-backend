@@ -32,8 +32,10 @@ import TelegramRoutes from './routes/TelegramRoutes.js';
 import telegramController from './controllers/TelegramController.js';
 import aiRouter from './routes/ai.js';
 import { getSupabaseClient } from './lib/supabaseAdmin.js';
+import { initFirebaseAdmin } from './lib/firebaseAdmin.js';
 
 dotenv.config();
+initFirebaseAdmin(); // FCM push — no-ops gracefully if env vars are absent
 
 const app = express();
 
