@@ -1,10 +1,12 @@
 import dotenv from 'dotenv';
+import { getMessaging } from 'firebase-admin/messaging';
 import EmailProvider from './notifications/providers/EmailProvider.js';
 import WhatsAppProvider from './notifications/providers/WhatsAppProvider.js';
 import NotificationRepository from '../repositories/NotificationRepository.js';
 import NotificationPreferencesRepository from '../repositories/NotificationPreferencesRepository.js';
 import NotificationLogRepository from '../repositories/NotificationLogRepository.js';
 import AssignmentRepository from '../repositories/AssignmentRepository.js';
+import DeviceTokenRepository from '../repositories/DeviceTokenRepository.js';
 
 dotenv.config();
 
@@ -13,6 +15,7 @@ export class NotificationService {
   constructor() {
     this.repo = new NotificationRepository();
     this.prefsRepo = new NotificationPreferencesRepository();
+    this.deviceTokenRepo = new DeviceTokenRepository();
     this.logRepo = new NotificationLogRepository();
     this.assignmentRepo = new AssignmentRepository();
     this.email = EmailProvider;
@@ -120,7 +123,76 @@ export class NotificationService {
     }
   }
 
-  // Helper to check deadlines (Cron Logic)
+  // ── Device Token Management ──────────────────────────────────────────────
+
+  /**
+   * Register or refresh a device's FCM token.
+   * Safe to call on every app launch — upserts on the token value.
+   */
+  async registerDeviceToken(userId, token, platform = 'android') {
+    return this.deviceTokenRepo.upsert(userId, token, platform);
+  }
+
+  /**
+   * Remove a token on logout so the device stops receiving notifications.
+   */
+  async unregisterDeviceToken(token) {
+    return this.deviceTokenRepo.deleteToken(token);
+  }
+
+  // ── FCM Push Notifications ───────────────────────────────────────────────
+
+  /**
+   * Send a push notification to all registered devices for a user.
+   * Falls back silently if no tokens are found or FCM is unavailable.
+   *
+   * @param {string} userId
+   * @param {{ title: string, body: string, data?: Record<string,string> }} payload
+   */
+  async pushToUser(userId, { title, body, data = {} }) {
+    try {
+      const tokens = await this.deviceTokenRepo.getByUserId(userId);
+      if (!tokens.length) return { success: true, sent: 0 };
+
+      const messaging = getMessaging();
+      const tokenStrings = tokens.map((t) => t.token);
+
+      const response = await messaging.sendEachForMulticast({
+        tokens: tokenStrings,
+        notification: { title, body },
+        data,
+        android: { priority: 'high' },
+        apns: { payload: { aps: { sound: 'default' } } },
+      });
+
+      // Clean up tokens that are no longer valid (expired / uninstalled app)
+      if (response.failureCount > 0) {
+        const invalidTokens = [];
+        response.responses.forEach((resp, idx) => {
+          if (!resp.success) {
+            const code = resp.error?.code;
+            if (
+              code === 'messaging/registration-token-not-registered' ||
+              code === 'messaging/invalid-registration-token'
+            ) {
+              invalidTokens.push(tokenStrings[idx]);
+            }
+          }
+        });
+        for (const staleToken of invalidTokens) {
+          await this.deviceTokenRepo.deleteToken(staleToken).catch(() => {});
+        }
+      }
+
+      console.info(`[FCM] Sent to ${response.successCount}/${tokenStrings.length} devices for user ${userId}`);
+      return { success: true, sent: response.successCount };
+    } catch (err) {
+      console.error('[FCM] pushToUser error', err);
+      return { success: false, error: err.message };
+    }
+  }
+
+  // ── Helper to check deadlines (Cron Logic) ───────────────────────────────
   async checkDeadlines() {
     console.log('[NotificationService] Checking deadlines...');
 
