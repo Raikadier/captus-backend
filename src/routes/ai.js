@@ -96,7 +96,8 @@ router.post("/chat", async (req, res) => {
     }
 
     // 5. Get AI Response
-    const responseObj = await routerAgent(message, userId, priorMessages);
+    const userRole = req.user?.role || "student";
+    const responseObj = await routerAgent(message, userId, priorMessages, userRole);
 
     const resultText = typeof responseObj?.result === "string"
       ? responseObj.result

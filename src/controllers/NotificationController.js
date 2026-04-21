@@ -146,6 +146,39 @@ class NotificationController {
         res.status(400).json({ error: error.message });
     }
   }
+
+  // ── FCM Device Token ──────────────────────────────────────────────────────
+
+  async registerDeviceToken(req, res) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) return res.status(401).json({ error: 'No autenticado' });
+
+      const { token, platform } = req.body;
+      if (!token || typeof token !== 'string') {
+        return res.status(400).json({ error: 'token es requerido' });
+      }
+
+      await NotificationService.registerDeviceToken(userId, token, platform || 'android');
+      return res.json({ success: true });
+    } catch (err) {
+      console.error('[NotificationController] registerDeviceToken', err);
+      return res.status(500).json({ error: 'Error al registrar token' });
+    }
+  }
+
+  async unregisterDeviceToken(req, res) {
+    try {
+      const { token } = req.body;
+      if (!token) return res.status(400).json({ error: 'token es requerido' });
+
+      await NotificationService.unregisterDeviceToken(token);
+      return res.json({ success: true });
+    } catch (err) {
+      console.error('[NotificationController] unregisterDeviceToken', err);
+      return res.status(500).json({ error: 'Error al eliminar token' });
+    }
+  }
 }
 
 export default new NotificationController();

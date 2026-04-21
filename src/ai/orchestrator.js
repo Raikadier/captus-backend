@@ -1,4 +1,4 @@
-import { together, groq, MODEL_REASONING, MODEL_FAST } from "./model.js";
+import { gemini, groq, MODEL_REASON, MODEL_FAST } from "./model.js";
 import { buildOrchestratorSystemPrompt } from "./prompts.js";
 import { executeTool, toolDefinitions, toolRegistry } from "./toolRegistry.js";
 import { extractJson, normalizeToolArgs } from "./utils/json.js";
@@ -48,18 +48,18 @@ const mapHistory = (conversationHistory) =>
       content,
     }));
 
-export const orchestrator = async ({ message, userId, intent, contextData, conversationHistory = [] }) => {
+export const orchestrator = async ({ message, userId, intent, contextData, conversationHistory = [], userRole = "student" }) => {
   const started = Date.now();
-  const system = buildOrchestratorSystemPrompt({ userId, intent, contextData });
+  const system = buildOrchestratorSystemPrompt({ userId, intent, contextData, userRole });
   const historyMessages = mapHistory(conversationHistory);
 
-  // Conversational path (no agent/tool) -> Groq
-  const replyWithGroq = async () => {
-    const systemPrompt = "Te llamas Captus. Eres un asistente amable y directo. Responde de forma breve y útil.";
+  // Conversational path (no tool needed) → Gemini Flash (fast + cheap)
+  const replyWithFast = async () => {
+    const systemPrompt =
+      "Te llamas Captus. Eres un asistente académico amable y directo. " +
+      "Responde de forma breve y útil en español.";
 
-    const chatClient = process.env.GROQ_API_KEY ? groq : together;
-
-    const response = await chatClient.chat.completions.create({
+    const response = await gemini.chat.completions.create({
       model: MODEL_FAST,
       messages: [
         { role: "system", content: systemPrompt },
@@ -73,11 +73,11 @@ export const orchestrator = async ({ message, userId, intent, contextData, conve
   };
 
   if (intent === "general") {
-    return await replyWithGroq();
+    return await replyWithFast();
   }
 
-  const response = await together.chat.completions.create({
-    model: MODEL_REASONING,
+  const response = await gemini.chat.completions.create({
+    model: MODEL_REASON,
     messages: [
       { role: "system", content: system },
       ...historyMessages,
@@ -112,6 +112,6 @@ export const orchestrator = async ({ message, userId, intent, contextData, conve
   }
 
   // 3) Conversación sin acción -> usar Groq para chat natural
-  console.info("[AI/orchestrator] conversational turn (groq)", { userId, ms: duration });
-  return await replyWithGroq();
+  console.info("[AI/orchestrator] conversational turn (fast)", { userId, ms: duration });
+  return await replyWithFast();
 };

@@ -632,13 +632,14 @@ describe('TaskService Integration Tests', () => {
 
                 mockTaskRepo.getById.mockResolvedValue(task);
                 mockSubTaskRepo.getAllByTaskId.mockResolvedValue(subtasks);
+                mockSubTaskRepo.delete = jest.fn().mockResolvedValue(true);
                 mockTaskRepo.delete.mockResolvedValue(true);
 
-                // Note: The delete method in TaskService has a bug - it doesn't return OperationResult
-                // This test documents the expected behavior - subtasks should be deleted
-                await taskService.delete(1, testUserId);
+                // resolveUserId requires an object { id } or a string — not a plain number.
+                const result = await taskService.delete(1, { id: testUserId });
 
-                // Subtasks should be deleted
+                expect(result.success).toBe(true);
+                // Subtasks should be fetched and deleted
                 expect(mockSubTaskRepo.getAllByTaskId).toHaveBeenCalledWith(1);
             });
 

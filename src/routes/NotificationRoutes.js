@@ -15,6 +15,10 @@ router.get('/preferences', NotificationController.getPreferences);
 router.put('/preferences', NotificationController.updatePreferences);
 router.post('/trigger', NotificationController.trigger);
 
+// FCM device token registration (called by mobile app on each launch)
+router.post('/device-token', NotificationController.registerDeviceToken);
+router.delete('/device-token', NotificationController.unregisterDeviceToken);
+
 // Public/System route (should ideally be protected by a CRON_SECRET header)
 router.get('/check-deadlines', NotificationController.checkDeadlines);
 

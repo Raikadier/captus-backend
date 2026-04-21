@@ -47,14 +47,16 @@ export class EventsService {
 
   async save(event, userId) {
     try {
-      const validation = this.validateEvent(eventData);
+      const validation = this.validateEvent(event);
       if (!validation.success) return validation;
 
-      if (!userId) {
+      // Accept both a raw ID string and a user object { id, email, ... }
+      const resolvedId = typeof userId === 'object' ? (userId?.id ?? userId) : userId;
+      if (!resolvedId) {
         return new OperationResult(false, "Usuario no autenticado.");
       }
 
-      event.user_id = userId;
+      event.user_id = resolvedId;
       event.is_past = Boolean(event.is_past);
       event.notify = Boolean(event.notify);
       if (!event.type) {
@@ -215,10 +217,11 @@ export class EventsService {
 
   async getUpcoming(options = {}, userId) {
     try {
-      if (!userId) return new OperationResult(false, "Usuario no autenticado.");
+      const resolvedId = typeof userId === 'object' ? (userId?.id ?? userId) : userId;
+      if (!resolvedId) return new OperationResult(false, "Usuario no autenticado.");
 
       const limit = options.limit || null;
-      const events = await this.eventsRepository.getUpcomingByUserId(userId, limit);
+      const events = await this.eventsRepository.getUpcomingByUserId(resolvedId, limit);
       return new OperationResult(true, "Próximos eventos obtenidos exitosamente.", events);
     } catch (error) {
       return new OperationResult(false, `Error al obtener eventos próximos: ${error.message}`);
