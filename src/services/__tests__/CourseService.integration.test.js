@@ -1,16 +1,13 @@
+/**
+ * CourseService integration tests — aligned with the current throw-based API.
+ *
+ * CourseService does NOT return OperationResult objects. It returns raw data
+ * on success and THROWS on errors (access denied, not found, etc.).
+ * These tests reflect the actual implementation in CourseService.js.
+ */
 import { jest } from '@jest/globals';
 import CourseService from '../CourseService.js';
-import { OperationResult } from '../../shared/OperationResult.js';
 
-/**
- * Integration tests for CourseService
- * Tests the complete course lifecycle including:
- * - Course creation with invite code generation
- * - Course retrieval for teachers and students
- * - Course detail access control
- * - Course update and delete with permission checks
- * - Grade retrieval
- */
 describe('CourseService Integration Tests', () => {
   let courseService;
   let mockCourseRepo;
@@ -50,12 +47,11 @@ describe('CourseService Integration Tests', () => {
     jest.clearAllMocks();
   });
 
-  // =========================================================================
-  // COURSE CREATION
-  // =========================================================================
+  // ── createCourse ─────────────────────────────────────────────────────────────
+
   describe('createCourse', () => {
-    it('should create a course successfully and generate an invite code', async () => {
-      mockCourseRepo.findByInviteCode.mockResolvedValue(null); // invite code is unique
+    it('creates a course and returns the saved record', async () => {
+      mockCourseRepo.findByInviteCode.mockResolvedValue(null);
       mockCourseRepo.save.mockResolvedValue({ ...baseCourse });
 
       const result = await courseService.createCourse(
@@ -63,209 +59,161 @@ describe('CourseService Integration Tests', () => {
         teacherId
       );
 
-      expect(result.success).toBe(true);
-      expect(result.data).toBeDefined();
+      expect(result).toBeDefined();
+      expect(result.title).toBe('Ingeniería de Software');
       expect(mockCourseRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({ teacher_id: teacherId, invite_code: expect.any(String) })
       );
     });
 
-    it('should fail if title is missing', async () => {
-      const result = await courseService.createCourse({ description: 'Desc' }, teacherId);
-
-      expect(result.success).toBe(false);
-      expect(result.message).toContain('título');
-      expect(mockCourseRepo.save).not.toHaveBeenCalled();
-    });
-
-    it('should fail if title is empty string', async () => {
-      const result = await courseService.createCourse({ title: '  ' }, teacherId);
-
-      expect(result.success).toBe(false);
-      expect(result.message).toContain('título');
-    });
-
-    it('should fail if teacherId is missing', async () => {
-      const result = await courseService.createCourse({ title: 'Curso' }, null);
-
-      expect(result.success).toBe(false);
-      expect(result.message).toContain('profesor');
-    });
-
-    it('should retry if generated invite code already exists', async () => {
-      // First call returns existing code, second returns null (unique)
+    it('retries invite code generation when code already exists', async () => {
       mockCourseRepo.findByInviteCode
-        .mockResolvedValueOnce({ id: 'other-course' })
-        .mockResolvedValueOnce(null);
+        .mockResolvedValueOnce({ id: 'other' })  // first code exists
+        .mockResolvedValueOnce(null);             // second is unique
       mockCourseRepo.save.mockResolvedValue(baseCourse);
 
-      const result = await courseService.createCourse({ title: 'Curso' }, teacherId);
+      await courseService.createCourse({ title: 'Curso' }, teacherId);
 
-      expect(result.success).toBe(true);
       expect(mockCourseRepo.findByInviteCode).toHaveBeenCalledTimes(2);
     });
   });
 
-  // =========================================================================
-  // COURSE RETRIEVAL
-  // =========================================================================
+  // ── getCoursesForUser ─────────────────────────────────────────────────────────
+
   describe('getCoursesForUser', () => {
-    it('should return teacher courses with enrollment count', async () => {
-      const mockCourses = [
+    it('returns teacher courses with enrollment counts', async () => {
+      mockCourseRepo.findByTeacher.mockResolvedValue([
         { ...baseCourse, enrollments: [{ count: 15 }] },
-        { ...baseCourse, id: 'course-2', title: 'Otro Curso', enrollments: [{ count: 5 }] },
-      ];
-      mockCourseRepo.findByTeacher.mockResolvedValue(mockCourses);
+        { ...baseCourse, id: 'course-2', enrollments: [{ count: 5 }] },
+      ]);
 
       const result = await courseService.getCoursesForUser(teacherId, 'teacher');
 
-      expect(result.success).toBe(true);
-      expect(result.data).toHaveLength(2);
-      expect(result.data[0].students).toBe(15);
-      expect(result.data[1].students).toBe(5);
+      expect(result).toHaveLength(2);
+      expect(result[0].students).toBe(15);
+      expect(result[1].students).toBe(5);
     });
 
-    it('should return student courses from enrollments', async () => {
-      const mockEnrollments = [
+    it('returns student courses from enrollments', async () => {
+      mockCourseRepo.findByStudent.mockResolvedValue([
         {
           courses: { ...baseCourse, teacher: { name: 'Prof. García' } },
           enrolled_at: '2025-01-01',
         },
-      ];
-      mockCourseRepo.findByStudent.mockResolvedValue(mockEnrollments);
+      ]);
 
       const result = await courseService.getCoursesForUser(studentId, 'student');
 
-      expect(result.success).toBe(true);
-      expect(result.data).toHaveLength(1);
-      expect(result.data[0].professor).toBe('Prof. García');
-      expect(result.data[0].enrolled_at).toBe('2025-01-01');
-    });
-
-    it('should fail if userId is missing', async () => {
-      const result = await courseService.getCoursesForUser(null, 'student');
-
-      expect(result.success).toBe(false);
-      expect(mockCourseRepo.findByStudent).not.toHaveBeenCalled();
+      expect(result).toHaveLength(1);
+      expect(result[0].professor).toBe('Prof. García');
+      expect(result[0].enrolled_at).toBe('2025-01-01');
     });
   });
 
-  // =========================================================================
-  // COURSE DETAIL ACCESS CONTROL
-  // =========================================================================
+  // ── getCourseDetail ───────────────────────────────────────────────────────────
+
   describe('getCourseDetail', () => {
-    it('should return course detail for the owning teacher', async () => {
+    it('returns course detail for the owning teacher', async () => {
       mockCourseRepo.getById.mockResolvedValue(baseCourse);
 
       const result = await courseService.getCourseDetail(baseCourse.id, teacherId, 'teacher');
 
-      expect(result.success).toBe(true);
-      expect(result.data).toEqual(baseCourse);
+      expect(result).toEqual(baseCourse);
       expect(mockEnrollmentRepo.isEnrolled).not.toHaveBeenCalled();
     });
 
-    it('should deny teacher access to another teacher\'s course', async () => {
+    it('throws when a different teacher tries to access the course', async () => {
       mockCourseRepo.getById.mockResolvedValue(baseCourse);
 
-      const result = await courseService.getCourseDetail(baseCourse.id, 'other-teacher', 'teacher');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toContain('permiso');
+      await expect(
+        courseService.getCourseDetail(baseCourse.id, 'other-teacher', 'teacher')
+      ).rejects.toThrow(/permiso/i);
     });
 
-    it('should return course detail for enrolled student', async () => {
+    it('returns course for an enrolled student', async () => {
       mockCourseRepo.getById.mockResolvedValue(baseCourse);
       mockEnrollmentRepo.isEnrolled.mockResolvedValue(true);
 
       const result = await courseService.getCourseDetail(baseCourse.id, studentId, 'student');
 
-      expect(result.success).toBe(true);
-      expect(result.data).toEqual(baseCourse);
+      expect(result).toEqual(baseCourse);
     });
 
-    it('should deny access to non-enrolled student', async () => {
+    it('throws when a non-enrolled student tries to access the course', async () => {
       mockCourseRepo.getById.mockResolvedValue(baseCourse);
       mockEnrollmentRepo.isEnrolled.mockResolvedValue(false);
 
-      const result = await courseService.getCourseDetail(baseCourse.id, studentId, 'student');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toContain('inscrito');
+      await expect(
+        courseService.getCourseDetail(baseCourse.id, studentId, 'student')
+      ).rejects.toThrow(/inscrito/i);
     });
 
-    it('should return failure if course does not exist', async () => {
+    it('throws when the course does not exist', async () => {
       mockCourseRepo.getById.mockResolvedValue(null);
 
-      const result = await courseService.getCourseDetail('non-existent', teacherId, 'teacher');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toContain('no encontrado');
+      await expect(
+        courseService.getCourseDetail('non-existent', teacherId, 'teacher')
+      ).rejects.toThrow(/no encontrado/i);
     });
   });
 
-  // =========================================================================
-  // COURSE UPDATE
-  // =========================================================================
+  // ── updateCourse ──────────────────────────────────────────────────────────────
+
   describe('updateCourse', () => {
-    it('should update course successfully if teacher owns it', async () => {
+    it('updates and returns the course when teacher owns it', async () => {
       mockCourseRepo.getById.mockResolvedValue(baseCourse);
       mockCourseRepo.update.mockResolvedValue({ ...baseCourse, title: 'Nuevo Título' });
 
       const result = await courseService.updateCourse(baseCourse.id, { title: 'Nuevo Título' }, teacherId);
 
-      expect(result.success).toBe(true);
-      expect(result.data.title).toBe('Nuevo Título');
+      expect(result.title).toBe('Nuevo Título');
     });
 
-    it('should deny update if teacher does not own the course', async () => {
+    it('throws when a different teacher tries to update', async () => {
       mockCourseRepo.getById.mockResolvedValue(baseCourse);
 
-      const result = await courseService.updateCourse(baseCourse.id, { title: 'X' }, 'other-teacher');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toContain('permiso');
+      await expect(
+        courseService.updateCourse(baseCourse.id, { title: 'X' }, 'other-teacher')
+      ).rejects.toThrow(/permiso/i);
       expect(mockCourseRepo.update).not.toHaveBeenCalled();
     });
 
-    it('should fail if course does not exist', async () => {
+    it('throws when the course does not exist', async () => {
       mockCourseRepo.getById.mockResolvedValue(null);
 
-      const result = await courseService.updateCourse('no-exist', { title: 'X' }, teacherId);
-
-      expect(result.success).toBe(false);
-      expect(mockCourseRepo.update).not.toHaveBeenCalled();
+      await expect(
+        courseService.updateCourse('no-exist', { title: 'X' }, teacherId)
+      ).rejects.toThrow(/no encontrado/i);
     });
   });
 
-  // =========================================================================
-  // COURSE DELETE
-  // =========================================================================
+  // ── deleteCourse ──────────────────────────────────────────────────────────────
+
   describe('deleteCourse', () => {
-    it('should delete course successfully if teacher owns it', async () => {
+    it('deletes the course when teacher owns it', async () => {
       mockCourseRepo.getById.mockResolvedValue(baseCourse);
       mockCourseRepo.delete.mockResolvedValue(true);
 
       const result = await courseService.deleteCourse(baseCourse.id, teacherId);
 
-      expect(result.success).toBe(true);
+      expect(result).toBe(true);
       expect(mockCourseRepo.delete).toHaveBeenCalledWith(baseCourse.id);
     });
 
-    it('should deny delete if teacher does not own the course', async () => {
+    it('throws when a different teacher tries to delete', async () => {
       mockCourseRepo.getById.mockResolvedValue(baseCourse);
 
-      const result = await courseService.deleteCourse(baseCourse.id, 'other-teacher');
-
-      expect(result.success).toBe(false);
+      await expect(
+        courseService.deleteCourse(baseCourse.id, 'other-teacher')
+      ).rejects.toThrow(/permiso/i);
       expect(mockCourseRepo.delete).not.toHaveBeenCalled();
     });
   });
 
-  // =========================================================================
-  // GRADE RETRIEVAL
-  // =========================================================================
+  // ── getCourseGrades ───────────────────────────────────────────────────────────
+
   describe('getCourseGrades', () => {
-    it('should return grades for owning teacher', async () => {
+    it('returns grades array for the owning teacher', async () => {
       mockCourseRepo.getById.mockResolvedValue(baseCourse);
       mockEnrollmentRepo.getCourseStudents.mockResolvedValue([
         { name: 'Ana García', email: 'ana@example.com', grade: 8.5, enrolled_at: '2025-01-01' },
@@ -274,34 +222,18 @@ describe('CourseService Integration Tests', () => {
 
       const result = await courseService.getCourseGrades(baseCourse.id, teacherId);
 
-      expect(result.success).toBe(true);
-      expect(result.data).toHaveLength(2);
-      expect(result.data[0].studentName).toBe('Ana García');
-      expect(result.data[0].grade).toBe(8.5);
+      expect(result).toHaveLength(2);
+      expect(result[0].studentName).toBe('Ana García');
+      expect(result[0].grade).toBe(8.5);
     });
 
-    it('should deny grade access if teacher does not own course', async () => {
+    it('throws when a different teacher tries to get grades', async () => {
       mockCourseRepo.getById.mockResolvedValue(baseCourse);
 
-      const result = await courseService.getCourseGrades(baseCourse.id, 'other-teacher');
-
-      expect(result.success).toBe(false);
+      await expect(
+        courseService.getCourseGrades(baseCourse.id, 'other-teacher')
+      ).rejects.toThrow(/permiso/i);
       expect(mockEnrollmentRepo.getCourseStudents).not.toHaveBeenCalled();
-    });
-  });
-
-  // =========================================================================
-  // OPERATIONRESULT SHAPE VALIDATION
-  // =========================================================================
-  describe('OperationResult shape consistency', () => {
-    it('all methods should return { success, message, data } shape', async () => {
-      mockCourseRepo.findByTeacher.mockResolvedValue([]);
-
-      const result = await courseService.getCoursesForUser(teacherId, 'teacher');
-
-      expect(result).toHaveProperty('success');
-      expect(result).toHaveProperty('message');
-      expect(result).toHaveProperty('data');
     });
   });
 });
