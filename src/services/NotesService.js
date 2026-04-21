@@ -31,11 +31,12 @@ export class NotesService {
       const validation = this.validateNote(note);
       if (!validation.success) return validation;
 
-      if (!userId) {
+      const resolvedId = typeof userId === 'object' ? (userId?.id ?? userId) : userId;
+      if (!resolvedId) {
         return new OperationResult(false, "Usuario no autenticado.");
       }
 
-      note.user_id = userId;
+      note.user_id = resolvedId;
 
       const savedNote = await this.repo.save(note);
       if (savedNote) {
@@ -50,9 +51,10 @@ export class NotesService {
 
   async getAll(userId) {
     try {
-      if (!userId) return new OperationResult(false, "Usuario no autenticado.");
+      const resolvedId = typeof userId === 'object' ? (userId?.id ?? userId) : userId;
+      if (!resolvedId) return new OperationResult(false, "Usuario no autenticado.");
 
-      const notes = await this.repo.getAllByUserId(userId);
+      const notes = await this.repo.getAllByUserId(resolvedId);
       return new OperationResult(true, "Notas obtenidas exitosamente.", notes);
     } catch (error) {
       return new OperationResult(false, `Error al obtener notas: ${error.message}`);
@@ -85,19 +87,21 @@ export class NotesService {
       const validation = this.validateNote(note, true);
       if (!validation.success) return validation;
 
+      const resolvedId = typeof userId === 'object' ? (userId?.id ?? userId) : userId;
+
       const existingNote = await this.repo.getById(note.id);
       if (!existingNote) {
         return new OperationResult(false, "Nota no encontrada.");
       }
 
-      if (!userId || existingNote.user_id !== userId) {
+      if (!resolvedId || existingNote.user_id !== resolvedId) {
         return new OperationResult(false, "Nota no accesible.");
       }
 
       // Update the update_at timestamp
       note.update_at = new Date();
 
-      const updated = await this.repo.update({ ...note, user_id: userId });
+      const updated = await this.repo.update({ ...note, user_id: resolvedId });
       if (updated) {
         return new OperationResult(true, "Nota actualizada exitosamente.", updated);
       } else {
