@@ -20,18 +20,19 @@ import OpenAI from "openai";
 
 // ── Gemini via OpenAI-compatible endpoint ─────────────────────────────────────
 const geminiBaseURL = "https://generativelanguage.googleapis.com/v1beta/openai/";
+const geminiApiKey = (process.env.GEMINI_API_KEY || "").trim();
 
-if (!process.env.GEMINI_API_KEY) {
+if (!geminiApiKey) {
   console.warn('[AI/model] GEMINI_API_KEY no está configurada — las llamadas a Gemini fallarán.');
 }
 
 export const gemini = new OpenAI({
-  apiKey: process.env.GEMINI_API_KEY || "missing-key",
+  apiKey: geminiApiKey || "missing-key",
   baseURL: geminiBaseURL,
 });
 
 /** Fast model: intent classification, conversational turns. */
-export const MODEL_FAST = "gemini-2.0-flash";
+export const MODEL_FAST = "gemini-2.5-flash";
 
 /** Reasoning model: tool orchestration, complex multi-step tasks. */
 // gemini-2.5-flash has thinking capabilities and completes in 5-15s (vs 40-90s for 2.5-pro),
@@ -65,3 +66,87 @@ export const groq = process.env.GROQ_API_KEY
  * Kept for backwards-compat with code that hasn't been migrated yet.
  */
 export const MODEL_REASONING = MODEL_REASON;
+
+const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
+const RETRY_DELAYS_MS = [400, 1200];
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const isRetryableError = (error) => RETRYABLE_STATUS_CODES.has(error?.status);
+
+const toPurpose = (model, purpose) => {
+  if (purpose) return purpose;
+  if (model === MODEL_FAST) return "fast";
+  if (model === MODEL_STUDY) return "study";
+  return "reason";
+};
+
+const fallbackModelFor = (provider, purpose) => {
+  if (provider === "groq") {
+    if (purpose === "fast") return "llama-3.1-8b-instant";
+    return "llama-3.1-70b-versatile";
+  }
+  if (provider === "together") {
+    if (purpose === "fast") return "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo";
+    return "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo";
+  }
+  return null;
+};
+
+const fallbackProviders = () => {
+  const providers = [];
+  if (process.env.GROQ_API_KEY) providers.push({ name: "groq", client: groq });
+  if (process.env.TOGETHER_API_KEY) providers.push({ name: "together", client: together });
+  return providers;
+};
+
+/**
+ * Resilient wrapper for chat completions:
+ * - retries transient Gemini outages (503/429/5xx)
+ * - optionally falls back to Groq/Together if configured
+ */
+export const createChatCompletion = async (params, options = {}) => {
+  const { provider = "gemini", purpose } = options;
+
+  if (provider !== "gemini") {
+    return gemini.chat.completions.create(params);
+  }
+
+  let lastError = null;
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      return await gemini.chat.completions.create(params);
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableError(error) || attempt === RETRY_DELAYS_MS.length) {
+        break;
+      }
+      await sleep(RETRY_DELAYS_MS[attempt]);
+    }
+  }
+
+  if (!isRetryableError(lastError)) {
+    throw lastError;
+  }
+
+  const resolvedPurpose = toPurpose(params.model, purpose);
+  for (const providerCfg of fallbackProviders()) {
+    const fallbackModel = fallbackModelFor(providerCfg.name, resolvedPurpose);
+    if (!fallbackModel) continue;
+    try {
+      console.warn("[AI/model] fallback_provider", {
+        from: "gemini",
+        to: providerCfg.name,
+        reason: lastError?.status || "error",
+      });
+      return await providerCfg.client.chat.completions.create({
+        ...params,
+        model: fallbackModel,
+      });
+    } catch (fallbackError) {
+      lastError = fallbackError;
+    }
+  }
+
+  throw lastError;
+};

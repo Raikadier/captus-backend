@@ -1,5 +1,5 @@
-import { gemini, MODEL_FAST } from "./model.js";
-import { allowedIntents, buildRouterSystemPrompt, resolveContextPrefix } from "./prompts.js";
+import { createChatCompletion, MODEL_FAST } from "./model.js";
+import { allowedIntents, buildRouterSystemPrompt } from "./prompts.js";
 import { orchestrator } from "./orchestrator.js";
 import { extractJson } from "./utils/json.js";
 import { fetchContextForIntent } from "./context.js";
@@ -8,7 +8,7 @@ export const routerAgent = async (message, userId, conversationHistory = [], use
   const started = Date.now();
 
   // 1. Clasificación rápida con Gemini Flash
-  const classification = await gemini.chat.completions.create({
+  const classification = await createChatCompletion({
     model: MODEL_FAST,
     response_format: { type: "json_object" },
     messages: [
@@ -16,7 +16,7 @@ export const routerAgent = async (message, userId, conversationHistory = [], use
       { role: "user", content: message },
     ],
     temperature: 0.1,
-  });
+  }, { purpose: "fast" });
 
   const rawContent = classification.choices?.[0]?.message?.content || "{}";
   const parsed = extractJson(rawContent) || {};
@@ -26,7 +26,6 @@ export const routerAgent = async (message, userId, conversationHistory = [], use
   // Si el usuario pregunta "¿Qué tareas tengo?", traemos las tareas y las inyectamos.
   // Esto evita que el orquestador tenga que llamar a la tool "list_tasks".
   const dynamicContext = await fetchContextForIntent(intent, userId, userRole);
-  const contextPrefix = resolveContextPrefix(intent);
 
   console.info("[AI/router] classified", {
     userId,
@@ -36,7 +35,7 @@ export const routerAgent = async (message, userId, conversationHistory = [], use
   });
 
   return orchestrator({
-    message: `${contextPrefix} ${message}`,
+    message,
     userId,
     intent,
     contextData: dynamicContext,

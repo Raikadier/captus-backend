@@ -4,7 +4,7 @@ import { EventsService } from "../services/EventsService.js";
 import CourseService from "../services/CourseService.js";
 import SubmissionService from "../services/SubmissionService.js";
 import EnrollmentService from "../services/EnrollmentService.js";
-import { gemini, MODEL_STUDY } from "./model.js";
+import { createChatCompletion, MODEL_STUDY } from "./model.js";
 import { OperationResult } from "../shared/OperationResult.js";
 
 const taskService = new TaskService();
@@ -329,7 +329,7 @@ export const toolRegistry = {
       },
       required: ["content", "type"],
     },
-    handler: async (args) => {
+    handler: async (args, userId) => {
       const { content, type, subject, language = "español" } = args;
 
       if (!content || content.trim().length < 50) {
@@ -367,7 +367,7 @@ export const toolRegistry = {
         "Responde SOLO con el material solicitado, sin texto adicional.";
 
       try {
-        const response = await gemini.chat.completions.create({
+        const response = await createChatCompletion({
           model: MODEL_STUDY,
           messages: [
             { role: "system", content: systemPrompt },
@@ -378,7 +378,7 @@ export const toolRegistry = {
           ],
           temperature: 0.3,
           max_tokens: 4096,
-        });
+        }, { purpose: "study" });
 
         const result = response.choices?.[0]?.message?.content?.trim();
         if (!result) {
@@ -764,7 +764,7 @@ export const toolRegistry = {
         `Responde SOLO con el array JSON, sin texto adicional.`;
 
       try {
-        const response = await gemini.chat.completions.create({
+        const response = await createChatCompletion({
           model: MODEL_STUDY,
           messages: [
             { role: "system", content: systemPrompt },
@@ -772,7 +772,7 @@ export const toolRegistry = {
           ],
           temperature: 0.5,
           max_tokens: 4096,
-        });
+        }, { purpose: "study" });
 
         const raw = response.choices?.[0]?.message?.content?.trim();
         if (!raw) {
@@ -856,7 +856,7 @@ export const toolRegistry = {
         `Responde SOLO con el JSON.`;
 
       try {
-        const response = await gemini.chat.completions.create({
+        const response = await createChatCompletion({
           model: MODEL_STUDY,
           messages: [
             { role: "system", content: systemPrompt },
@@ -864,7 +864,7 @@ export const toolRegistry = {
           ],
           temperature: 0.3,
           max_tokens: 2048,
-        });
+        }, { purpose: "study" });
 
         const raw = response.choices?.[0]?.message?.content?.trim();
         if (!raw) {
@@ -918,6 +918,6 @@ export const executeTool = async ({ name, args, userId }) => {
     return await tool.handler(args, userId);
   } catch (error) {
     console.error(`[AI/tools] Error ejecutando ${name}`, error);
-    throw error;
+    return new OperationResult(false, `No pude completar "${name}": ${error.message}`);
   }
 };

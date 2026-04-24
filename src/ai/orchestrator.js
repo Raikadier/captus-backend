@@ -1,4 +1,4 @@
-import { gemini, groq, MODEL_REASON, MODEL_FAST } from "./model.js";
+import { createChatCompletion, MODEL_REASON, MODEL_FAST } from "./model.js";
 import { buildOrchestratorSystemPrompt } from "./prompts.js";
 import { executeTool, toolDefinitions, toolRegistry } from "./toolRegistry.js";
 import { extractJson, normalizeToolArgs } from "./utils/json.js";
@@ -39,6 +39,7 @@ const tryRunToolFromJson = async ({ content, userId }) => {
 };
 
 const MAX_HISTORY_MESSAGES = 20;
+const FALLBACK_RESPONSE = "No pude generar una respuesta útil por ahora.";
 
 const mapHistory = (conversationHistory) =>
   conversationHistory
@@ -59,7 +60,7 @@ export const orchestrator = async ({ message, userId, intent, contextData, conve
       "Te llamas Captus. Eres un asistente académico amable y directo. " +
       "Responde de forma breve y útil en español.";
 
-    const response = await gemini.chat.completions.create({
+    const response = await createChatCompletion({
       model: MODEL_FAST,
       messages: [
         { role: "system", content: systemPrompt },
@@ -67,7 +68,7 @@ export const orchestrator = async ({ message, userId, intent, contextData, conve
         { role: "user", content: message },
       ],
       temperature: 0.4,
-    });
+    }, { purpose: "fast" });
     const content = response.choices?.[0]?.message?.content?.trim() || "";
     return { result: content, actionPerformed: null, data: null };
   };
@@ -76,7 +77,7 @@ export const orchestrator = async ({ message, userId, intent, contextData, conve
     return await replyWithFast();
   }
 
-  const response = await gemini.chat.completions.create({
+  const response = await createChatCompletion({
     model: MODEL_REASON,
     messages: [
       { role: "system", content: system },
@@ -86,7 +87,7 @@ export const orchestrator = async ({ message, userId, intent, contextData, conve
     tools: toolDefinitions,
     tool_choice: "auto",
     temperature: 0.2,
-  });
+  }, { purpose: "reason" });
 
   const aiMessage = response.choices?.[0]?.message;
   const duration = Date.now() - started;
@@ -102,7 +103,7 @@ export const orchestrator = async ({ message, userId, intent, contextData, conve
     return renderOperationResult(toolName, result);
   }
 
-  const content = aiMessage?.content?.trim() || "No pude generar una respuesta útil por ahora.";
+  const content = aiMessage?.content?.trim() || "";
 
   // 2) JSON in content (fallback)
   const jsonResult = await tryRunToolFromJson({ content, userId });
@@ -111,7 +112,15 @@ export const orchestrator = async ({ message, userId, intent, contextData, conve
     return renderOperationResult(toolName, jsonResult);
   }
 
-  // 3) Conversación sin acción -> usar Groq para chat natural
-  console.info("[AI/orchestrator] conversational turn (fast)", { userId, ms: duration });
-  return await replyWithFast();
+  // 3) Conversación sin acción -> usar la respuesta del modelo principal si es útil.
+  if (content) {
+    console.info("[AI/orchestrator] reasoning_text", { userId, ms: duration });
+    return { result: content, actionPerformed: null, data: null };
+  }
+
+  // 4) Fallback solo si no hubo contenido usable
+  console.info("[AI/orchestrator] fast_fallback", { userId, ms: duration });
+  const fastResponse = await replyWithFast();
+  if (fastResponse.result) return fastResponse;
+  return { result: FALLBACK_RESPONSE, actionPerformed: null, data: null };
 };
