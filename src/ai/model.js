@@ -21,6 +21,10 @@ import OpenAI from "openai";
 // ── Gemini via OpenAI-compatible endpoint ─────────────────────────────────────
 const geminiBaseURL = "https://generativelanguage.googleapis.com/v1beta/openai/";
 
+if (!process.env.GEMINI_API_KEY) {
+  console.warn('[AI/model] GEMINI_API_KEY no está configurada — las llamadas a Gemini fallarán.');
+}
+
 export const gemini = new OpenAI({
   apiKey: process.env.GEMINI_API_KEY || "missing-key",
   baseURL: geminiBaseURL,
@@ -30,11 +34,13 @@ export const gemini = new OpenAI({
 export const MODEL_FAST = "gemini-2.0-flash";
 
 /** Reasoning model: tool orchestration, complex multi-step tasks. */
-export const MODEL_REASON = "gemini-2.5-pro";
+// gemini-2.5-flash has thinking capabilities and completes in 5-15s (vs 40-90s for 2.5-pro),
+// which keeps Vercel serverless functions well within timeout limits.
+export const MODEL_REASON = "gemini-2.5-flash";
 
 /**
- * Study model: same as REASON but we reference it explicitly so callers
- * know they're using the 1M-token context window for document ingestion.
+ * Study model: 1M-token context window for document ingestion.
+ * Uses Pro only for study tasks where latency is acceptable.
  */
 export const MODEL_STUDY = "gemini-2.5-pro";
 
