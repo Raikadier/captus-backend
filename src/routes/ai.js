@@ -116,7 +116,11 @@ router.post("/chat", async (req, res) => {
     return res.json({ result: resultText, conversationId, actionPerformed, data: toolData });
   } catch (err) {
     console.error("[AI/chat] error", err);
-    return res.status(500).json({ error: "Error en IA" });
+    return res.status(500).json({
+      error: "Error en IA",
+      detail: err?.message || String(err),
+      stack: err?.stack?.split("\n").slice(0, 5),
+    });
   }
 });
 
