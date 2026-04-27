@@ -25,6 +25,17 @@ export default class GradingScaleRepository {
     return data;
   }
 
+  /** Maps frontend { min, max } → DB { min_value, max_value } */
+  _levelToDb(level, scaleId) {
+    return {
+      scale_id:  scaleId,
+      label:     level.label,
+      min_value: level.min_value ?? level.min,
+      max_value: level.max_value ?? level.max,
+      color:     level.color ?? '#22c55e',
+    };
+  }
+
   async save(payload) {
     const { levels, ...scaleData } = payload;
 
@@ -38,7 +49,7 @@ export default class GradingScaleRepository {
     if (levels?.length) {
       const { error: levelsError } = await this.client
         .from('grading_scale_levels')
-        .insert(levels.map(l => ({ ...l, scale_id: scale.id })));
+        .insert(levels.map(l => this._levelToDb(l, scale.id)));
       if (levelsError) throw levelsError;
     }
 
@@ -61,7 +72,7 @@ export default class GradingScaleRepository {
       if (levels.length) {
         const { error: levelsError } = await this.client
           .from('grading_scale_levels')
-          .insert(levels.map(l => ({ ...l, scale_id: id })));
+          .insert(levels.map(l => this._levelToDb(l, id)));
         if (levelsError) throw levelsError;
       }
     }
