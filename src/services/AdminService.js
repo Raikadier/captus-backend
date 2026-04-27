@@ -123,8 +123,13 @@ export default class AdminService {
       if (!existing) isUnique = true;
     }
 
+    // API sends { name, description }; courses table uses { title, description }
+    // teacher_id uses admin as provisional owner until a teacher is assigned
+    const { name, ...rest } = data;
     return this.courseRepo.save({
-      ...data,
+      ...rest,
+      title:           name ?? rest.title,
+      teacher_id:      rest.teacher_id ?? adminId,
       invite_code:     inviteCode,
       institution_id:  institutionId,
     });
