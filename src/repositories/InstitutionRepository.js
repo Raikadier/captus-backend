@@ -59,7 +59,7 @@ export default class InstitutionRepository {
   async getMembers(institutionId, role = null) {
     let query = this.client
       .from('users')
-      .select('id, name, email, role, avatar_url, created_at')
+      .select('id, name, email, role, "avatarUrl", created_at')
       .eq('institution_id', institutionId)
       .order('name');
 

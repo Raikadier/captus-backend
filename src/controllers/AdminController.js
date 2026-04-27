@@ -87,7 +87,15 @@ export default class AdminController {
     try {
       const institutionId = await resolveInstitutionId(req);
       const courses = await svc.getInstitutionCourses(institutionId);
-      res.json(courses);
+      // Normalize: title→name, teacher{}→teacher_name/teacher_id for frontend
+      const normalized = courses.map(c => ({
+        ...c,
+        name:              c.title ?? c.name,
+        teacher_id:        c.teacher?.id   ?? null,
+        teacher_name:      c.teacher?.name ?? null,
+        enrollments_count: c.enrollments?.[0]?.count ?? 0,
+      }));
+      res.json(normalized);
     } catch (e) { res.status(500).json({ error: e.message }); }
   }
 
@@ -95,7 +103,8 @@ export default class AdminController {
     try {
       const institutionId = await resolveInstitutionId(req);
       const course = await svc.createCourseAsAdmin(req.body, req.user.id, institutionId);
-      res.status(201).json(course);
+      // Return normalized shape
+      res.status(201).json({ ...course, name: course.title ?? course.name });
     } catch (e) { res.status(400).json({ error: e.message }); }
   }
 
