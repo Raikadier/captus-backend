@@ -31,6 +31,7 @@ import NotificationRoutes from './routes/NotificationRoutes.js';
 import TelegramRoutes from './routes/TelegramRoutes.js';
 import telegramController from './controllers/TelegramController.js';
 import aiRouter from './routes/ai.js';
+import AdminRoutes from './routes/AdminRoutes.js';
 import { getSupabaseClient } from './lib/supabaseAdmin.js';
 import { initFirebaseAdmin } from './lib/firebaseAdmin.js';
 
@@ -127,6 +128,9 @@ if (ENV_OK && supabaseAdmin) {
   // Telegram webhook (public) + protected routes
   app.post('/api/telegram/webhook', telegramController.handleWebhook);
   app.use('/api/telegram', verifySupabaseToken, TelegramRoutes);
+
+  // Admin routes (institution management)
+  app.use('/api/admin', AdminRoutes);
 }
 
 // Root routes
