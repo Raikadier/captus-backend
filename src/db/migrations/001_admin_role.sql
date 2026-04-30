@@ -124,6 +124,14 @@ ALTER TABLE public.academic_periods     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.grading_scales       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.grading_scale_levels ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "admin_manage_institution"    ON public.institutions;
+DROP POLICY IF EXISTS "admin_manage_periods"        ON public.academic_periods;
+DROP POLICY IF EXISTS "members_read_periods"        ON public.academic_periods;
+DROP POLICY IF EXISTS "admin_manage_grading"        ON public.grading_scales;
+DROP POLICY IF EXISTS "members_read_grading"        ON public.grading_scales;
+DROP POLICY IF EXISTS "members_read_grading_levels" ON public.grading_scale_levels;
+DROP POLICY IF EXISTS "admin_manage_grading_levels" ON public.grading_scale_levels;
+
 -- institutions: admin full access
 CREATE POLICY "admin_manage_institution" ON public.institutions
   FOR ALL TO authenticated
