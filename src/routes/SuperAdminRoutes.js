@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import buildSupabaseAuthMiddleware from '../middlewares/verifySupabaseToken.js';
-import injectUserRole from '../middlewares/injectUserRole.js';
+import { injectUserRole } from '../middlewares/injectUserRole.js';
 import requireSuperAdminRole from '../middlewares/requireSuperAdminRole.js';
 import SuperAdminController from '../controllers/SuperAdminController.js';
 import { getSupabaseClient } from '../lib/supabaseAdmin.js';
