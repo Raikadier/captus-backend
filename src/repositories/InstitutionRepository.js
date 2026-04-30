@@ -26,9 +26,12 @@ export default class InstitutionRepository {
   }
 
   async findByUser(userId) {
+    // Use explicit FK name to avoid PGRST201 ambiguity:
+    // migration 002 added institutions.created_by→public.users FK,
+    // creating a second relationship between users↔institutions.
     const { data, error } = await this.client
       .from('users')
-      .select('institution_id, institutions(*)')
+      .select('institution_id, institutions!users_institution_id_fkey(*)')
       .eq('id', userId)
       .single();
     if (error) throw error;
