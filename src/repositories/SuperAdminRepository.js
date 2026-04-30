@@ -45,6 +45,7 @@ export default class SuperAdminRepository {
   async listInstitutions({ page = 1, limit = 20, search = '' } = {}) {
     const offset = (page - 1) * limit;
 
+    // After migration 002, created_by FK points to public.users → join works
     let query = this.client
       .from('institutions')
       .select(`
@@ -66,6 +67,7 @@ export default class SuperAdminRepository {
   }
 
   async getInstitutionDetail(id) {
+    // After migration 002, created_by FK points to public.users → join works
     const { data: inst, error } = await this.client
       .from('institutions')
       .select(`
