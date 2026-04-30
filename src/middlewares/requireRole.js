@@ -15,7 +15,8 @@ export const requireTeacherRole = (req, res, next) => {
 export const requireAdminRole = (req, res, next) => {
   const userRole = req.user?.role || req.user?.app_metadata?.role;
 
-  if (userRole === 'admin') {
+  // superadmin has all admin privileges too
+  if (userRole === 'admin' || userRole === 'superadmin') {
     return next();
   }
 

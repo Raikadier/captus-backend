@@ -32,6 +32,7 @@ import TelegramRoutes from './routes/TelegramRoutes.js';
 import telegramController from './controllers/TelegramController.js';
 import aiRouter from './routes/ai.js';
 import AdminRoutes from './routes/AdminRoutes.js';
+import SuperAdminRoutes from './routes/SuperAdminRoutes.js';
 import { getSupabaseClient } from './lib/supabaseAdmin.js';
 import { initFirebaseAdmin } from './lib/firebaseAdmin.js';
 
@@ -144,6 +145,9 @@ if (ENV_OK && supabaseAdmin) {
 
   // Admin routes (institution management)
   app.use('/api/admin', AdminRoutes);
+
+  // Superadmin routes (platform management — all tenants)
+  app.use('/api/superadmin', SuperAdminRoutes);
 }
 
 // Root routes
