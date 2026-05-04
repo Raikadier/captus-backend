@@ -260,8 +260,14 @@ export default class AdminService {
         .eq('institution_id', institutionId).eq('role', 'teacher'),
       supabase.from('courses').select('id', { count: 'exact', head: true })
         .eq('institution_id', institutionId),
+      // Scoped to institution's courses to avoid cross-tenant leakage
       supabase.from('course_enrollments')
-        .select('id', { count: 'exact', head: true }),
+        .select('id', { count: 'exact', head: true })
+        .in(
+          'course_id',
+          (await supabase.from('courses').select('id').eq('institution_id', institutionId))
+            .data?.map(c => c.id) ?? []
+        ),
     ]);
 
     return {

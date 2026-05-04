@@ -84,8 +84,14 @@ export default class SuperAdminRepository {
         .eq('institution_id', id),
       this.client.from('courses').select('id', { count: 'exact', head: true })
         .eq('institution_id', id),
+      // Scoped to this institution's courses to avoid cross-tenant leakage
       this.client.from('course_enrollments')
-        .select('id', { count: 'exact', head: true }),
+        .select('id', { count: 'exact', head: true })
+        .in(
+          'course_id',
+          (await this.client.from('courses').select('id').eq('institution_id', id))
+            .data?.map(c => c.id) ?? []
+        ),
     ]);
 
     // Members by role
