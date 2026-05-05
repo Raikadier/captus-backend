@@ -1,18 +1,27 @@
 import { TaskService } from "../services/TaskService.js";
 import { NotesService } from "../services/NotesService.js";
 import { EventsService } from "../services/EventsService.js";
+import EventsRepository from "../repositories/EventsRepository.js";
 import CourseService from "../services/CourseService.js";
 import SubmissionService from "../services/SubmissionService.js";
 import EnrollmentService from "../services/EnrollmentService.js";
+import AssignmentRepository from "../repositories/AssignmentRepository.js";
+import SubmissionRepository from "../repositories/SubmissionRepository.js";
+import EnrollmentRepository from "../repositories/EnrollmentRepository.js";
+import { requireSupabaseClient } from "../lib/supabaseAdmin.js";
 import { createChatCompletion, MODEL_STUDY } from "./model.js";
 import { OperationResult } from "../shared/OperationResult.js";
 
-const taskService = new TaskService();
-const notesService = new NotesService();
-const eventsService = new EventsService();
-const courseService = new CourseService();
+const taskService     = new TaskService();
+const notesService    = new NotesService();
+// FIX: EventsService requires repository injection — instantiate with EventsRepository
+const eventsService   = new EventsService(new EventsRepository());
+const courseService   = new CourseService();
 const submissionService = new SubmissionService();
 const enrollmentService = new EnrollmentService();
+const assignmentRepo  = new AssignmentRepository();
+const submissionRepo  = new SubmissionRepository();
+const enrollmentRepo  = new EnrollmentRepository();
 
 const validateArgs = (schema, args = {}) => {
   const errors = [];
@@ -891,6 +900,251 @@ export const toolRegistry = {
           false,
           `Error al generar la rúbrica: ${error.message}`
         );
+      }
+    },
+  },
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // CRUD — Delete & Update completions
+  // ════════════════════════════════════════════════════════════════════════════
+
+  delete_task: {
+    description: "Elimina una tarea por ID. Usa list_tasks primero para obtener el id.",
+    parameters: {
+      type: "object",
+      properties: {
+        task_id: { type: "number", description: "ID de la tarea a eliminar" },
+      },
+      required: ["task_id"],
+    },
+    handler: async (args, userId) => {
+      const { task_id } = args;
+      if (!task_id) return new OperationResult(false, "task_id es requerido");
+      const result = await taskService.delete(task_id, { id: userId });
+      return wrapResult("delete_task", result);
+    },
+  },
+
+  update_task: {
+    description: "Actualiza título, descripción o fecha de una tarea existente.",
+    parameters: {
+      type: "object",
+      properties: {
+        task_id:     { type: "number", description: "ID de la tarea" },
+        title:       { type: "string", description: "Nuevo título" },
+        description: { type: "string", description: "Nueva descripción" },
+        due_date:    { type: "string", description: "Nueva fecha límite ISO 8601", format: "date-time" },
+        priority_id: { type: "number", description: "Nueva prioridad" },
+      },
+      required: ["task_id"],
+    },
+    handler: async (args, userId) => {
+      const { task_id, ...fields } = args;
+      if (!task_id) return new OperationResult(false, "task_id es requerido");
+      const payload = { id: task_id, user_id: userId };
+      if (fields.title)       payload.title       = fields.title;
+      if (fields.description) payload.description = fields.description;
+      if (fields.due_date)    payload.due_date    = fields.due_date;
+      if (fields.priority_id) payload.priority_id = fields.priority_id;
+      const result = await taskService.update(payload, { id: userId });
+      return wrapResult("update_task", result);
+    },
+  },
+
+  delete_event: {
+    description: "Elimina un evento del calendario por ID.",
+    parameters: {
+      type: "object",
+      properties: {
+        event_id: { type: "number", description: "ID del evento a eliminar" },
+      },
+      required: ["event_id"],
+    },
+    handler: async (args, userId) => {
+      const { event_id } = args;
+      if (!event_id) return new OperationResult(false, "event_id es requerido");
+      const result = await eventsService.delete(event_id, userId);
+      return wrapResult("delete_event", result);
+    },
+  },
+
+  delete_note: {
+    description: "Elimina una nota por ID.",
+    parameters: {
+      type: "object",
+      properties: {
+        note_id: { type: "number", description: "ID de la nota a eliminar" },
+      },
+      required: ["note_id"],
+    },
+    handler: async (args, userId) => {
+      const { note_id } = args;
+      if (!note_id) return new OperationResult(false, "note_id es requerido");
+      const result = await notesService.delete(note_id, { id: userId });
+      return wrapResult("delete_note", result);
+    },
+  },
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // TEACHER — Course overview & grade reports
+  // ════════════════════════════════════════════════════════════════════════════
+
+  get_teacher_courses: {
+    description:
+      "Lista todos los cursos del docente con número de estudiantes matriculados, " +
+      "código de invitación y período académico. Usar antes de analytics para conocer los IDs.",
+    parameters: { type: "object", properties: {} },
+    handler: async (_args, userId) => {
+      try {
+        const courses = await courseService.getCoursesForUser(userId, "teacher");
+        const list = Array.isArray(courses) ? courses : courses?.data ?? [];
+        if (!list.length) {
+          return new OperationResult(true, "No tienes cursos asignados.", []);
+        }
+        const lines = list.map(
+          (c) =>
+            `• [ID:${c.id}] ${c.title} — ${c.students ?? 0} estudiantes` +
+            (c.invite_code ? ` | código: ${c.invite_code}` : "")
+        );
+        return new OperationResult(
+          true,
+          `📚 Tus cursos (${list.length}):\n${lines.join("\n")}`,
+          list
+        );
+      } catch (e) {
+        return new OperationResult(false, `Error al obtener cursos: ${e.message}`);
+      }
+    },
+  },
+
+  generate_grade_report: {
+    description:
+      "Genera un reporte completo de calificaciones para un curso: " +
+      "tabla con todos los estudiantes y sus notas por actividad/corte. " +
+      "Incluye promedio por estudiante y promedio por actividad.",
+    parameters: {
+      type: "object",
+      properties: {
+        course_id: {
+          type: "number",
+          description: "ID del curso para el reporte",
+        },
+        format: {
+          type: "string",
+          description: "'table' para tabla de texto | 'summary' para resumen ejecutivo (default: table)",
+        },
+      },
+      required: ["course_id"],
+    },
+    handler: async (args, userId) => {
+      const { course_id, format = "table" } = args;
+
+      try {
+        // 1. Verify teacher owns the course
+        const supabase = requireSupabaseClient();
+        const { data: course, error: courseErr } = await supabase
+          .from("courses")
+          .select("id, title, teacher_id")
+          .eq("id", course_id)
+          .single();
+        if (courseErr || !course)
+          return new OperationResult(false, `Curso ${course_id} no encontrado.`);
+        if (course.teacher_id !== userId)
+          return new OperationResult(false, "No tienes permiso para ver este curso.");
+
+        // 2. Get enrolled students
+        const students = await enrollmentRepo.getCourseStudents(course_id);
+        if (!students.length)
+          return new OperationResult(true, `No hay estudiantes matriculados en "${course.title}".`, {
+            course: course.title, students: [],
+          });
+
+        // 3. Get all assignments for the course
+        const assignments = await assignmentRepo.findByCourse(course_id);
+
+        // 4. Build grade matrix: { studentId → { assignmentId → grade } }
+        const gradeMatrix = {};
+        for (const s of students) gradeMatrix[s.id] = {};
+
+        for (const assignment of assignments) {
+          const submissions = await submissionRepo.findByAssignment(assignment.id);
+          for (const sub of submissions) {
+            const sid = sub.student_id;
+            if (gradeMatrix[sid] !== undefined) {
+              gradeMatrix[sid][assignment.id] = sub.graded ? (sub.grade ?? "S/C") : "Pendiente";
+            }
+          }
+        }
+
+        // 5. Compute student averages
+        const studentRows = students.map((s) => {
+          const grades = assignments.map((a) => gradeMatrix[s.id][a.id] ?? "—");
+          const numeric = grades
+            .map((g) => parseFloat(g))
+            .filter((n) => !isNaN(n));
+          const avg = numeric.length
+            ? (numeric.reduce((a, b) => a + b, 0) / numeric.length).toFixed(2)
+            : "—";
+          return { name: s.name || s.email, grades, avg };
+        });
+
+        if (format === "summary") {
+          // Generate with Gemini
+          const tableText = [
+            `Curso: ${course.title}`,
+            `Actividades: ${assignments.map((a) => a.title).join(", ")}`,
+            "",
+            ...studentRows.map(
+              (r) => `${r.name}: ${r.grades.join(" | ")} → Promedio: ${r.avg}`
+            ),
+          ].join("\n");
+
+          const response = await createChatCompletion({
+            model: MODEL_STUDY,
+            messages: [
+              {
+                role: "system",
+                content:
+                  "Eres un docente universitario. Genera un reporte académico ejecutivo " +
+                  "en español basado en los datos proporcionados. Incluye: " +
+                  "resumen general, estudiantes destacados, estudiantes en riesgo y recomendaciones.",
+              },
+              { role: "user", content: `DATOS DE NOTAS:\n${tableText}` },
+            ],
+            temperature: 0.3,
+            max_tokens: 1500,
+          });
+          const summary = response.choices?.[0]?.message?.content?.trim();
+          return new OperationResult(true, summary || tableText, {
+            course: course.title,
+            assignments: assignments.map((a) => a.title),
+            students: studentRows,
+          });
+        }
+
+        // Default: table format
+        const header = ["Estudiante", ...assignments.map((a) => a.title.substring(0, 20)), "Promedio"];
+        const separator = header.map((h) => "─".repeat(h.length)).join(" | ");
+        const rows = studentRows.map(
+          (r) => [r.name, ...r.grades, r.avg].join(" | ")
+        );
+
+        const tableOutput =
+          `📊 Reporte de Notas — ${course.title}\n` +
+          `${"═".repeat(50)}\n` +
+          `${header.join(" | ")}\n${separator}\n` +
+          rows.join("\n") +
+          `\n${"═".repeat(50)}\n` +
+          `Total estudiantes: ${students.length} | ` +
+          `Actividades evaluadas: ${assignments.length}`;
+
+        return new OperationResult(true, tableOutput, {
+          course: course.title,
+          assignments: assignments.map((a) => ({ id: a.id, title: a.title })),
+          students: studentRows,
+        });
+      } catch (e) {
+        return new OperationResult(false, `Error al generar reporte: ${e.message}`);
       }
     },
   },

@@ -121,6 +121,47 @@ export default class InstitutionRepository {
     return data;
   }
 
+  async getCourseStudents(courseId) {
+    const { data, error } = await this.client
+      .from('course_enrollments')
+      .select('id, enrolled_at, student:users!course_enrollments_student_id_fkey(id, name, email, "avatarUrl", role)')
+      .eq('course_id', courseId)
+      .order('enrolled_at', { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map(e => ({ ...e.student, enrolled_at: e.enrolled_at, enrollment_id: e.id }));
+  }
+
+  async unenrollStudent(courseId, studentId) {
+    const { error } = await this.client
+      .from('course_enrollments')
+      .delete()
+      .eq('course_id', courseId)
+      .eq('student_id', studentId);
+    if (error) throw error;
+  }
+
+  async updateCourse(courseId, institutionId, payload) {
+    const { data, error } = await this.client
+      .from('courses')
+      .update({ ...payload, updated_at: new Date() })
+      .eq('id', courseId)
+      .eq('institution_id', institutionId)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async broadcastNotification(userIds, { title, body, type = 'system' }) {
+    if (!userIds.length) return 0;
+    const rows = userIds.map(uid => ({ user_id: uid, title, body, type }));
+    const { error, count } = await this.client
+      .from('notifications')
+      .insert(rows, { count: 'exact' });
+    if (error) throw error;
+    return count ?? rows.length;
+  }
+
   async assignCourseToInstitution(courseId, institutionId, periodId = null) {
     const update = { institution_id: institutionId };
     if (periodId) update.period_id = periodId;

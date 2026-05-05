@@ -103,8 +103,40 @@ export default class AdminController {
     try {
       const institutionId = await resolveInstitutionId(req);
       const course = await svc.createCourseAsAdmin(req.body, req.user.id, institutionId);
-      // Return normalized shape
       res.status(201).json({ ...course, name: course.title ?? course.name });
+    } catch (e) { res.status(400).json({ error: e.message }); }
+  }
+
+  async updateCourse(req, res) {
+    try {
+      const institutionId = await resolveInstitutionId(req);
+      const course = await svc.updateCourse(req.params.courseId, req.body, institutionId);
+      res.json({ ...course, name: course.title ?? course.name });
+    } catch (e) { res.status(400).json({ error: e.message }); }
+  }
+
+  async getCourseStudents(req, res) {
+    try {
+      const institutionId = await resolveInstitutionId(req);
+      const students = await svc.getCourseStudents(req.params.courseId, institutionId);
+      res.json(students);
+    } catch (e) { res.status(400).json({ error: e.message }); }
+  }
+
+  async unenrollStudent(req, res) {
+    try {
+      const institutionId = await resolveInstitutionId(req);
+      await svc.unenrollStudent(req.params.courseId, req.params.studentId, institutionId);
+      res.json({ message: 'Estudiante desinscrito del curso.' });
+    } catch (e) { res.status(400).json({ error: e.message }); }
+  }
+
+  async broadcastNotification(req, res) {
+    try {
+      const institutionId = await resolveInstitutionId(req);
+      const { title, body, role } = req.body;
+      const count = await svc.broadcastNotification(institutionId, { title, body, role });
+      res.json({ message: `Notificación enviada a ${count} miembros.`, count });
     } catch (e) { res.status(400).json({ error: e.message }); }
   }
 

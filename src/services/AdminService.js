@@ -123,15 +123,17 @@ export default class AdminService {
       if (!existing) isUnique = true;
     }
 
-    // API sends { name, description }; courses table uses { title, description }
-    // teacher_id uses admin as provisional owner until a teacher is assigned
-    const { name, ...rest } = data;
+    // API sends { name, description, period_id?, grading_scale_id? }
+    // courses table uses { title, description }
+    const { name, period_id, grading_scale_id, ...rest } = data;
     return this.courseRepo.save({
       ...rest,
-      title:           name ?? rest.title,
-      teacher_id:      rest.teacher_id ?? adminId,
-      invite_code:     inviteCode,
-      institution_id:  institutionId,
+      title:            name ?? rest.title,
+      teacher_id:       rest.teacher_id ?? adminId,
+      invite_code:      inviteCode,
+      institution_id:   institutionId,
+      ...(period_id        ? { period_id }        : {}),
+      ...(grading_scale_id ? { grading_scale_id } : {}),
     });
   }
 
@@ -159,6 +161,45 @@ export default class AdminService {
 
     if (error) throw error;
     return data;
+  }
+
+  async getCourseStudents(courseId, institutionId) {
+    // Verify course belongs to institution
+    const supabase = requireSupabaseClient();
+    const { data: course, error } = await supabase
+      .from('courses').select('id').eq('id', courseId).eq('institution_id', institutionId).single();
+    if (error || !course) throw new Error('Curso no encontrado en esta institución.');
+    return this.institutionRepo.getCourseStudents(courseId);
+  }
+
+  async unenrollStudent(courseId, studentId, institutionId) {
+    const supabase = requireSupabaseClient();
+    const { data: course, error } = await supabase
+      .from('courses').select('id').eq('id', courseId).eq('institution_id', institutionId).single();
+    if (error || !course) throw new Error('Curso no encontrado en esta institución.');
+    return this.institutionRepo.unenrollStudent(courseId, studentId);
+  }
+
+  async updateCourse(courseId, data, institutionId) {
+    const { name, description, teacher_id, period_id, grading_scale_id } = data;
+    const payload = {};
+    if (name !== undefined)              payload.title           = name;
+    if (description !== undefined)       payload.description     = description;
+    if (teacher_id !== undefined)        payload.teacher_id      = teacher_id;
+    if (period_id !== undefined)         payload.period_id       = period_id || null;
+    if (grading_scale_id !== undefined)  payload.grading_scale_id = grading_scale_id || null;
+    return this.institutionRepo.updateCourse(courseId, institutionId, payload);
+  }
+
+  async broadcastNotification(institutionId, { title, body, role }) {
+    if (!title?.trim()) throw new Error('El título es requerido.');
+    const supabase = requireSupabaseClient();
+    let query = supabase.from('users').select('id').eq('institution_id', institutionId);
+    if (role) query = query.eq('role', role);
+    const { data: members, error } = await query;
+    if (error) throw error;
+    const userIds = (members ?? []).map(m => m.id);
+    return this.institutionRepo.broadcastNotification(userIds, { title, body, type: 'system' });
   }
 
   async bulkEnrollStudents(courseId, studentEmails, institutionId) {

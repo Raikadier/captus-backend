@@ -27,10 +27,16 @@ router.delete('/users/:userId',                ctrl.removeUser.bind(ctrl));
 router.patch ('/users/:userId/role',           ctrl.changeUserRole.bind(ctrl));
 
 // ── Courses ─────────────────────────────────────────────────────────────────
-router.get   ('/courses',                           ctrl.getCourses.bind(ctrl));
-router.post  ('/courses',                           ctrl.createCourse.bind(ctrl));
-router.post  ('/courses/:courseId/assign-teacher',  ctrl.assignTeacher.bind(ctrl));
-router.post  ('/courses/:courseId/bulk-enroll',     ctrl.bulkEnroll.bind(ctrl));
+router.get   ('/courses',                                   ctrl.getCourses.bind(ctrl));
+router.post  ('/courses',                                   ctrl.createCourse.bind(ctrl));
+router.put   ('/courses/:courseId',                         ctrl.updateCourse.bind(ctrl));
+router.get   ('/courses/:courseId/students',                ctrl.getCourseStudents.bind(ctrl));
+router.delete('/courses/:courseId/students/:studentId',     ctrl.unenrollStudent.bind(ctrl));
+router.post  ('/courses/:courseId/assign-teacher',          ctrl.assignTeacher.bind(ctrl));
+router.post  ('/courses/:courseId/bulk-enroll',             ctrl.bulkEnroll.bind(ctrl));
+
+// ── Notifications ────────────────────────────────────────────────────────────
+router.post  ('/notifications/broadcast',                   ctrl.broadcastNotification.bind(ctrl));
 
 // ── Grading Scales ───────────────────────────────────────────────────────────
 router.get   ('/grading-scales',                          ctrl.getGradingScales.bind(ctrl));
