@@ -49,9 +49,9 @@ const mapHistory = (conversationHistory) =>
       content,
     }));
 
-export const orchestrator = async ({ message, userId, intent, contextData, conversationHistory = [], userRole = "student" }) => {
+export const orchestrator = async ({ message, userId, intent, contextData, conversationHistory = [], userRole = "student", userProfile = null }) => {
   const started = Date.now();
-  const system = buildOrchestratorSystemPrompt({ userId, intent, contextData, userRole });
+  const system = buildOrchestratorSystemPrompt({ userId, intent, contextData, userRole, userProfile });
   const historyMessages = mapHistory(conversationHistory);
 
   // Conversational path (no tool needed) → Gemini Flash (fast + cheap)

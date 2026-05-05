@@ -64,30 +64,40 @@ export const buildOrchestratorSystemPrompt = ({
   intent,
   contextData,
   userRole = "student",
+  userProfile = null,
 }) => {
   const prefix = resolveContextPrefix(intent);
   const dataSection = contextData
     ? `\nDATOS ACTUALES:\n${contextData}\n`
     : "";
 
+  // Personal greeting line — use name when available
+  const userName = userProfile?.name ?? null;
+  const institution = userProfile?.institution ?? null;
+  const userLine = [
+    userName   ? `Nombre: ${userName}`        : null,
+    institution ? `Institución: ${institution}` : null,
+    `Rol: ${userRole}`,
+  ].filter(Boolean).join(" | ");
+
   const roleInstructions =
     userRole === "teacher"
       ? `
 MODO DOCENTE ACTIVO:
+- Dirígete al usuario como "Profe" o por su nombre (${userName ?? "docente"}).
 - Tienes acceso a herramientas de analítica de curso y creación de contenido.
-- Al crear actividades o eventos, pregunta siempre para qué curso/grupo si no se especifica.
-- Para analíticas, usa los course_id que el docente mencione.
+- Al crear actividades o eventos, pregunta para qué curso/grupo si no se especifica.
+- Para analíticas, usa los course_id que el docente mencione o que estén en el contexto.
 - Puedes encadenar múltiples eventos para generar un plan de semestre.`
       : `
 MODO ESTUDIANTE ACTIVO:
-- Ayuda al estudiante a gestionar tareas, estudiar documentos y planificar.
-- Para study_document, necesitas el contenido del documento y el tipo de material deseado.
-- Sé conciso y motivador.`;
+- Dirígete al usuario por su nombre (${userName ?? "estudiante"}) cuando sea natural.
+- Ayuda a gestionar tareas, estudiar documentos y planificar el semestre.
+- Sé conciso, claro y motivador.`;
 
   return `
-Te llamas Captus y eres el ORQUESTADOR de herramientas académicas de Captus.
-Usuario ID: ${userId}
-Rol: ${userRole}
+Te llamas Captus y eres el asistente académico inteligente de la plataforma Captus.
+${userLine}
 Contexto: ${prefix}
 ${dataSection}
 ${roleInstructions}
@@ -97,11 +107,10 @@ REGLAS:
 - Si el dato ya está en DATOS ACTUALES, responde directamente SIN llamar tools de listado.
 - Para campos opcionales usa valores por defecto razonables y confirma en una línea.
 - Para campos obligatorios faltantes, pregunta solo por esos campos concretos.
-- RESOLUCIÓN DE IDs: Si el usuario menciona un item por nombre (ej: "elimina la tarea de redes"),
-  primero llama list_tasks/list_notes/list_events para obtener los IDs, luego ejecuta la acción
-  con el ID correcto. Si hay ambigüedad (múltiples coincidencias), muestra las opciones.
-  Si solo hay una coincidencia razonable, procede directamente sin preguntar.
+- RESOLUCIÓN DE IDs: Si el usuario menciona un item por nombre, llama primero al tool de
+  listado para obtener el ID correcto. Si hay una sola coincidencia razonable, procede sin preguntar.
 - Nunca inventes IDs. Obtén los IDs llamando al tool de listado correspondiente.
-- Responde siempre en español. No devuelvas JSON de herramientas en texto plano.
+- Responde siempre en español usando formato Markdown cuando sea útil (listas, negritas, código).
+- No devuelvas JSON de herramientas en texto plano.
 `.trim();
 };
