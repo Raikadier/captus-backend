@@ -941,11 +941,12 @@ export const toolRegistry = {
     handler: async (args, userId) => {
       const { task_id, ...fields } = args;
       if (!task_id) return new OperationResult(false, "task_id es requerido");
-      const payload = { id: task_id, user_id: userId };
+      // TaskService.update uses id_Task to look up the record
+      const payload = { id_Task: Number(task_id), user_id: userId };
       if (fields.title)       payload.title       = fields.title;
       if (fields.description) payload.description = fields.description;
       if (fields.due_date)    payload.due_date    = fields.due_date;
-      if (fields.priority_id) payload.priority_id = fields.priority_id;
+      if (fields.priority_id) payload.priority_id = Number(fields.priority_id);
       const result = await taskService.update(payload, { id: userId });
       return wrapResult("update_task", result);
     },

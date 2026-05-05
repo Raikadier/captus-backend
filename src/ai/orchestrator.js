@@ -77,50 +77,81 @@ export const orchestrator = async ({ message, userId, intent, contextData, conve
     return await replyWithFast();
   }
 
-  const response = await createChatCompletion({
-    model: MODEL_REASON,
-    messages: [
-      { role: "system", content: system },
-      ...historyMessages,
-      { role: "user", content: message },
-    ],
-    tools: toolDefinitions,
-    tool_choice: "auto",
-    temperature: 0.2,
-  }, { purpose: "reason" });
+  // ── Agentic loop: up to 4 iterations so LLM can chain tools (list → delete, etc.)
+  const MAX_STEPS = 4;
+  const messages = [
+    { role: "system", content: system },
+    ...historyMessages,
+    { role: "user", content: message },
+  ];
 
-  const aiMessage = response.choices?.[0]?.message;
-  const duration = Date.now() - started;
+  let lastActionPerformed = null;
+  let lastData = null;
 
-  // 1) Tool calls (structured)
-  if (aiMessage?.tool_calls?.length) {
-    const call = aiMessage.tool_calls[0]; // single tool per turn
-    const toolName = call.function.name;
-    const args = normalizeToolArgs(call.function.arguments);
+  for (let step = 0; step < MAX_STEPS; step++) {
+    const response = await createChatCompletion({
+      model: MODEL_REASON,
+      messages,
+      tools: toolDefinitions,
+      tool_choice: "auto",
+      temperature: 0.2,
+    }, { purpose: "reason" });
 
-    console.info("[AI/orchestrator] tool_call", { userId, toolName, ms: duration });
-    const result = await executeTool({ name: toolName, args, userId });
-    return renderOperationResult(toolName, result);
+    const aiMessage = response.choices?.[0]?.message;
+    const duration = Date.now() - started;
+
+    // Always push the assistant message so the next iteration has context
+    messages.push(aiMessage);
+
+    // 1) Tool calls (structured) — execute and feed result back
+    if (aiMessage?.tool_calls?.length) {
+      const call = aiMessage.tool_calls[0];
+      const toolName = call.function.name;
+      const args = normalizeToolArgs(call.function.arguments);
+
+      console.info("[AI/orchestrator] tool_call", { userId, toolName, step, ms: duration });
+      const result = await executeTool({ name: toolName, args, userId });
+
+      // Track the most recent meaningful action
+      if (result?.success !== false) {
+        lastActionPerformed = toolName;
+        lastData = result?.data ?? null;
+      }
+
+      // Feed tool result back so the LLM can continue reasoning
+      messages.push({
+        role: "tool",
+        tool_call_id: call.id,
+        content: JSON.stringify({
+          success: result?.success ?? true,
+          message: result?.message ?? String(result),
+          data: result?.data ?? null,
+        }),
+      });
+      continue; // Let LLM decide next step
+    }
+
+    // 2) No more tool calls — LLM is giving a final text response
+    const content = aiMessage?.content?.trim() || "";
+
+    // Try JSON fallback (legacy path)
+    const jsonResult = await tryRunToolFromJson({ content, userId });
+    if (jsonResult) {
+      const toolName = extractJson(content)?.tool;
+      return renderOperationResult(toolName, jsonResult);
+    }
+
+    if (content) {
+      console.info("[AI/orchestrator] final_response", { userId, step, ms: duration });
+      return { result: content, actionPerformed: lastActionPerformed, data: lastData };
+    }
+
+    break;
   }
 
-  const content = aiMessage?.content?.trim() || "";
-
-  // 2) JSON in content (fallback)
-  const jsonResult = await tryRunToolFromJson({ content, userId });
-  if (jsonResult) {
-    const toolName = extractJson(content)?.tool;
-    return renderOperationResult(toolName, jsonResult);
-  }
-
-  // 3) Conversación sin acción -> usar la respuesta del modelo principal si es útil.
-  if (content) {
-    console.info("[AI/orchestrator] reasoning_text", { userId, ms: duration });
-    return { result: content, actionPerformed: null, data: null };
-  }
-
-  // 4) Fallback solo si no hubo contenido usable
-  console.info("[AI/orchestrator] fast_fallback", { userId, ms: duration });
+  // Fallback
+  console.info("[AI/orchestrator] fast_fallback", { userId, ms: Date.now() - started });
   const fastResponse = await replyWithFast();
   if (fastResponse.result) return fastResponse;
-  return { result: FALLBACK_RESPONSE, actionPerformed: null, data: null };
+  return { result: FALLBACK_RESPONSE, actionPerformed: lastActionPerformed, data: lastData };
 };
