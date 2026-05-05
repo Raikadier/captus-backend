@@ -74,7 +74,8 @@ export const orchestrator = async ({ message, userId, intent, contextData, conve
   };
 
   if (intent === "general") {
-    return await replyWithFast();
+    const r = await replyWithFast();
+    return { ...r, steps: [] };
   }
 
   // ── Agentic loop: up to 4 iterations so LLM can chain tools (list → delete, etc.)
@@ -87,6 +88,7 @@ export const orchestrator = async ({ message, userId, intent, contextData, conve
 
   let lastActionPerformed = null;
   let lastData = null;
+  const steps = []; // Reasoning trail exposed to the client
 
   for (let step = 0; step < MAX_STEPS; step++) {
     const response = await createChatCompletion({
@@ -100,10 +102,9 @@ export const orchestrator = async ({ message, userId, intent, contextData, conve
     const aiMessage = response.choices?.[0]?.message;
     const duration = Date.now() - started;
 
-    // Always push the assistant message so the next iteration has context
     messages.push(aiMessage);
 
-    // 1) Tool calls (structured) — execute and feed result back
+    // 1) Tool calls — execute and record as a reasoning step
     if (aiMessage?.tool_calls?.length) {
       const call = aiMessage.tool_calls[0];
       const toolName = call.function.name;
@@ -112,38 +113,40 @@ export const orchestrator = async ({ message, userId, intent, contextData, conve
       console.info("[AI/orchestrator] tool_call", { userId, toolName, step, ms: duration });
       const result = await executeTool({ name: toolName, args, userId });
 
-      // Track the most recent meaningful action
-      if (result?.success !== false) {
+      const success = result?.success !== false;
+      if (success) {
         lastActionPerformed = toolName;
         lastData = result?.data ?? null;
       }
 
-      // Feed tool result back so the LLM can continue reasoning
+      steps.push({ type: "tool", name: toolName, success, ms: Date.now() - started });
+
       messages.push({
         role: "tool",
         tool_call_id: call.id,
         content: JSON.stringify({
-          success: result?.success ?? true,
+          success,
           message: result?.message ?? String(result),
           data: result?.data ?? null,
         }),
       });
-      continue; // Let LLM decide next step
+      continue;
     }
 
-    // 2) No more tool calls — LLM is giving a final text response
+    // 2) Final text response
     const content = aiMessage?.content?.trim() || "";
 
-    // Try JSON fallback (legacy path)
     const jsonResult = await tryRunToolFromJson({ content, userId });
     if (jsonResult) {
       const toolName = extractJson(content)?.tool;
-      return renderOperationResult(toolName, jsonResult);
+      const rendered = renderOperationResult(toolName, jsonResult);
+      steps.push({ type: "tool", name: toolName, success: true, ms: Date.now() - started });
+      return { ...rendered, steps };
     }
 
     if (content) {
       console.info("[AI/orchestrator] final_response", { userId, step, ms: duration });
-      return { result: content, actionPerformed: lastActionPerformed, data: lastData };
+      return { result: content, actionPerformed: lastActionPerformed, data: lastData, steps };
     }
 
     break;
@@ -152,6 +155,6 @@ export const orchestrator = async ({ message, userId, intent, contextData, conve
   // Fallback
   console.info("[AI/orchestrator] fast_fallback", { userId, ms: Date.now() - started });
   const fastResponse = await replyWithFast();
-  if (fastResponse.result) return fastResponse;
-  return { result: FALLBACK_RESPONSE, actionPerformed: lastActionPerformed, data: lastData };
+  if (fastResponse.result) return { ...fastResponse, steps };
+  return { result: FALLBACK_RESPONSE, actionPerformed: lastActionPerformed, data: lastData, steps };
 };

@@ -107,13 +107,14 @@ router.post("/chat", async (req, res) => {
 
     const actionPerformed = responseObj?.actionPerformed || null;
     const toolData = responseObj?.data || null;
+    const steps = responseObj?.steps || [];
 
     // 6. Save AI Message
     await messageRepo.create(conversationId, "bot", resultText);
 
-    console.info("[AI/chat] response", { userId, preview: resultText.slice(0, 80), actionPerformed });
+    console.info("[AI/chat] response", { userId, preview: resultText.slice(0, 80), actionPerformed, steps: steps.length });
 
-    return res.json({ result: resultText, conversationId, actionPerformed, data: toolData });
+    return res.json({ result: resultText, conversationId, actionPerformed, data: toolData, steps });
   } catch (err) {
     console.error("[AI/chat] error", err);
     return res.status(500).json({
