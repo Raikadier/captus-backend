@@ -939,16 +939,47 @@ export const toolRegistry = {
       required: ["task_id"],
     },
     handler: async (args, userId) => {
-      const { task_id, ...fields } = args;
+      const { task_id, title, description, due_date, priority_id } = args;
       if (!task_id) return new OperationResult(false, "task_id es requerido");
-      // TaskService.update uses id_Task to look up the record
-      const payload = { id_Task: Number(task_id), user_id: userId };
-      if (fields.title)       payload.title       = fields.title;
-      if (fields.description) payload.description = fields.description;
-      if (fields.due_date)    payload.due_date    = fields.due_date;
-      if (fields.priority_id) payload.priority_id = Number(fields.priority_id);
-      const result = await taskService.update(payload, { id: userId });
-      return wrapResult("update_task", result);
+
+      // Bypass TaskService.update (which runs mapToDb and nullifies optional fields).
+      // Instead patch only the provided fields directly via Supabase admin client.
+      try {
+        const supabase = requireSupabaseClient();
+
+        // Verify ownership first
+        const { data: existing, error: fetchErr } = await supabase
+          .from("tasks")
+          .select("id, user_id")
+          .eq("id", Number(task_id))
+          .single();
+        if (fetchErr || !existing)
+          return new OperationResult(false, `Tarea ${task_id} no encontrada.`);
+        if (existing.user_id !== userId)
+          return new OperationResult(false, "No tienes permiso para modificar esta tarea.");
+
+        // Build sparse patch — only fields explicitly supplied
+        const patch = {};
+        if (title       !== undefined) patch.title       = title;
+        if (description !== undefined) patch.description = description;
+        if (due_date    !== undefined) patch.due_date    = due_date;
+        if (priority_id !== undefined) patch.priority_id = Number(priority_id);
+
+        if (Object.keys(patch).length === 0)
+          return new OperationResult(false, "No se indicó ningún campo a actualizar.");
+
+        const { data, error } = await supabase
+          .from("tasks")
+          .update(patch)
+          .eq("id", Number(task_id))
+          .select()
+          .single();
+
+        if (error) return new OperationResult(false, `Error al actualizar: ${error.message}`);
+        return new OperationResult(true, "Tarea actualizada exitosamente.", data);
+      } catch (e) {
+        return new OperationResult(false, `Error al actualizar tarea: ${e.message}`);
+      }
     },
   },
 
@@ -981,7 +1012,8 @@ export const toolRegistry = {
     handler: async (args, userId) => {
       const { note_id } = args;
       if (!note_id) return new OperationResult(false, "note_id es requerido");
-      const result = await notesService.delete(note_id, { id: userId });
+      // NotesService.delete expects raw userId string (not wrapped object)
+      const result = await notesService.delete(note_id, userId);
       return wrapResult("delete_note", result);
     },
   },
