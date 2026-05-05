@@ -122,15 +122,6 @@ export default class InstitutionRepository {
     return data;
   }
 
-  async deleteCourse(courseId, institutionId) {
-    const { error } = await this.client
-      .from('courses')
-      .delete()
-      .eq('id', courseId)
-      .eq('institution_id', institutionId);
-    if (error) throw error;
-  }
-
   async getCourseStudents(courseId) {
     const { data, error } = await this.client
       .from('course_enrollments')
