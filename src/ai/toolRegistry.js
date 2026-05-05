@@ -1096,15 +1096,32 @@ export const toolRegistry = {
         const assignments = await assignmentRepo.findByCourse(course_id);
 
         // 4. Build grade matrix: { studentId → { assignmentId → grade } }
+        // Submissions are group-based: resolve student_id via course_group_members
         const gradeMatrix = {};
         for (const s of students) gradeMatrix[s.id] = {};
 
         for (const assignment of assignments) {
           const submissions = await submissionRepo.findByAssignment(assignment.id);
           for (const sub of submissions) {
-            const sid = sub.student_id;
-            if (gradeMatrix[sid] !== undefined) {
-              gradeMatrix[sid][assignment.id] = sub.graded ? (sub.grade ?? "S/C") : "Pendiente";
+            const gradeVal = sub.graded ? (sub.grade ?? "S/C") : "Pendiente";
+
+            // Individual submission
+            if (sub.student_id && gradeMatrix[sub.student_id] !== undefined) {
+              gradeMatrix[sub.student_id][assignment.id] = gradeVal;
+              continue;
+            }
+
+            // Group submission — resolve members
+            if (sub.group_id) {
+              const { data: members } = await supabase
+                .from("course_group_members")
+                .select("student_id")
+                .eq("group_id", sub.group_id);
+              for (const m of members ?? []) {
+                if (gradeMatrix[m.student_id] !== undefined) {
+                  gradeMatrix[m.student_id][assignment.id] = gradeVal;
+                }
+              }
             }
           }
         }

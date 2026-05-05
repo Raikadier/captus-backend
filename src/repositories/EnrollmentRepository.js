@@ -23,7 +23,6 @@ export default class EnrollmentRepository extends BaseRepository {
       .select(`
         student_id,
         enrolled_at,
-        grade,
         student:student_id (
           id,
           name,
