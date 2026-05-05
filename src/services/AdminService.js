@@ -137,6 +137,13 @@ export default class AdminService {
     });
   }
 
+  async deleteCourse(courseId, institutionId) {
+    // First unenroll all students to avoid FK constraint violations
+    const supabase = requireSupabaseClient();
+    await supabase.from('course_enrollments').delete().eq('course_id', courseId);
+    return this.institutionRepo.deleteCourse(courseId, institutionId);
+  }
+
   async assignTeacherToCourse(courseId, teacherId, institutionId) {
     const supabase = requireSupabaseClient();
 

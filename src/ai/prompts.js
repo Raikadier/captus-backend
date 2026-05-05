@@ -97,7 +97,11 @@ REGLAS:
 - Si el dato ya está en DATOS ACTUALES, responde directamente SIN llamar tools de listado.
 - Para campos opcionales usa valores por defecto razonables y confirma en una línea.
 - Para campos obligatorios faltantes, pregunta solo por esos campos concretos.
-- Nunca inventes IDs ni fechas que no existan en el contexto.
+- RESOLUCIÓN DE IDs: Si el usuario menciona un item por nombre (ej: "elimina la tarea de redes"),
+  primero llama list_tasks/list_notes/list_events para obtener los IDs, luego ejecuta la acción
+  con el ID correcto. Si hay ambigüedad (múltiples coincidencias), muestra las opciones.
+  Si solo hay una coincidencia razonable, procede directamente sin preguntar.
+- Nunca inventes IDs. Obtén los IDs llamando al tool de listado correspondiente.
 - Responde siempre en español. No devuelvas JSON de herramientas en texto plano.
 `.trim();
 };

@@ -111,6 +111,7 @@ export default class InstitutionRepository {
       .from('courses')
       .select(`
         id, title, description, invite_code, created_at,
+        teacher_id, grading_scale_id, period_id,
         teacher:users!courses_teacher_id_fkey(id, name, email),
         period:academic_periods(id, name),
         enrollments:course_enrollments(count)

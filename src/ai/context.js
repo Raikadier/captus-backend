@@ -1,11 +1,13 @@
 import { TaskService } from "../services/TaskService.js";
 import { NotesService } from "../services/NotesService.js";
 import { EventsService } from "../services/EventsService.js";
+import EventsRepository from "../repositories/EventsRepository.js";
 import CourseService from "../services/CourseService.js";
 
 const taskService = new TaskService();
 const notesService = new NotesService();
-const eventsService = new EventsService();
+// FIX: EventsService requires repository injection
+const eventsService = new EventsService(new EventsRepository());
 const courseService = new CourseService();
 
 /**

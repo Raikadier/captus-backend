@@ -1,5 +1,6 @@
 import CourseRepository from '../repositories/CourseRepository.js';
 import EnrollmentRepository from '../repositories/EnrollmentRepository.js';
+import { requireSupabaseClient } from '../lib/supabaseAdmin.js';
 import crypto from 'crypto';
 
 export default class CourseService {
@@ -85,15 +86,76 @@ export default class CourseService {
     if (!course) throw new Error('Curso no encontrado');
     if (course.teacher_id !== teacherId) throw new Error('No tienes permiso para descargar las notas de este curso');
 
-    // Get enrollments with student details
-    const enrollments = await this.enrollmentRepo.getCourseStudents(courseId);
+    const supabase = requireSupabaseClient();
 
-    // Map to a simpler structure
-    return enrollments.map(e => ({
-      studentName: e.name || 'Estudiante',
-      studentEmail: e.email || 'N/A',
-      grade: e.grade || 0, // Ensure repository returns grade
-      enrolledAt: e.enrolled_at
-    }));
+    // Get enrolled students
+    const students = await this.enrollmentRepo.getCourseStudents(courseId);
+
+    // Get all submissions for this course via assignments → group submissions
+    const { data: assignments } = await supabase
+      .from('course_assignments')
+      .select('id, title')
+      .eq('course_id', courseId);
+
+    if (!assignments?.length) {
+      return students.map(s => ({
+        student_id: s.id,
+        studentName: s.name || 'Estudiante',
+        studentEmail: s.email || 'N/A',
+        grade: null,
+        enrolledAt: s.enrolled_at,
+      }));
+    }
+
+    const assignmentIds = assignments.map(a => a.id);
+
+    // Get submissions for these assignments (group-based)
+    const { data: submissions } = await supabase
+      .from('assignment_submissions')
+      .select('assignment_id, group_id, grade, graded')
+      .in('assignment_id', assignmentIds)
+      .eq('graded', true);
+
+    // Get group members to map group → student
+    if (!submissions?.length) {
+      return students.map(s => ({
+        student_id: s.id,
+        studentName: s.name || 'Estudiante',
+        studentEmail: s.email || 'N/A',
+        grade: null,
+        enrolledAt: s.enrolled_at,
+      }));
+    }
+
+    const groupIds = [...new Set(submissions.map(s => s.group_id).filter(Boolean))];
+    const { data: groupMembers } = await supabase
+      .from('course_group_members')
+      .select('group_id, student_id')
+      .in('group_id', groupIds);
+
+    // Build: studentId → [grades]
+    const studentGrades = {};
+    for (const sub of submissions) {
+      if (!sub.group_id || sub.grade === null) continue;
+      const members = groupMembers?.filter(m => m.group_id === sub.group_id) ?? [];
+      for (const member of members) {
+        if (!studentGrades[member.student_id]) studentGrades[member.student_id] = [];
+        studentGrades[member.student_id].push(sub.grade);
+      }
+    }
+
+    return students.map(s => {
+      const grades = studentGrades[s.id] ?? [];
+      const avg = grades.length
+        ? grades.reduce((a, b) => a + b, 0) / grades.length
+        : null;
+      return {
+        student_id: s.id,
+        studentName: s.name || 'Estudiante',
+        studentEmail: s.email || 'N/A',
+        grade: avg,
+        enrolledAt: s.enrolled_at,
+      };
+    });
   }
 }

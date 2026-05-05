@@ -91,12 +91,21 @@ export default class AdminController {
       const normalized = courses.map(c => ({
         ...c,
         name:              c.title ?? c.name,
-        teacher_id:        c.teacher?.id   ?? null,
+        teacher_id:        c.teacher?.id   ?? c.teacher_id ?? null,
         teacher_name:      c.teacher?.name ?? null,
+        grading_scale_id:  c.grading_scale_id ?? null,
         enrollments_count: c.enrollments?.[0]?.count ?? 0,
       }));
       res.json(normalized);
     } catch (e) { res.status(500).json({ error: e.message }); }
+  }
+
+  async deleteCourse(req, res) {
+    try {
+      const institutionId = await resolveInstitutionId(req);
+      await svc.deleteCourse(req.params.courseId, institutionId);
+      res.json({ message: 'Curso eliminado.' });
+    } catch (e) { res.status(400).json({ error: e.message }); }
   }
 
   async createCourse(req, res) {
