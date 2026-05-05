@@ -30,6 +30,7 @@ router.patch ('/users/:userId/role',           ctrl.changeUserRole.bind(ctrl));
 router.get   ('/courses',                                   ctrl.getCourses.bind(ctrl));
 router.post  ('/courses',                                   ctrl.createCourse.bind(ctrl));
 router.put   ('/courses/:courseId',                         ctrl.updateCourse.bind(ctrl));
+router.delete('/courses/:courseId',                         ctrl.deleteCourse.bind(ctrl));
 router.get   ('/courses/:courseId/students',                ctrl.getCourseStudents.bind(ctrl));
 router.delete('/courses/:courseId/students/:studentId',     ctrl.unenrollStudent.bind(ctrl));
 router.post  ('/courses/:courseId/assign-teacher',          ctrl.assignTeacher.bind(ctrl));

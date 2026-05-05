@@ -123,18 +123,26 @@ export default class AdminService {
       if (!existing) isUnique = true;
     }
 
-    // API sends { name, description, period_id?, grading_scale_id? }
+    // API sends { name, description, teacher_id?, period_id?, grading_scale_id? }
     // courses table uses { title, description }
-    const { name, period_id, grading_scale_id, ...rest } = data;
+    const { name, period_id, grading_scale_id, teacher_id, ...rest } = data;
     return this.courseRepo.save({
       ...rest,
       title:            name ?? rest.title,
-      teacher_id:       rest.teacher_id ?? adminId,
+      // Allow null teacher — don't default to admin (admin ≠ teacher role)
+      ...(teacher_id !== undefined ? { teacher_id: teacher_id ?? null } : {}),
       invite_code:      inviteCode,
       institution_id:   institutionId,
       ...(period_id        ? { period_id }        : {}),
       ...(grading_scale_id ? { grading_scale_id } : {}),
     });
+  }
+
+  async deleteCourse(courseId, institutionId) {
+    // First unenroll all students to avoid FK constraint violations
+    const supabase = requireSupabaseClient();
+    await supabase.from('course_enrollments').delete().eq('course_id', courseId);
+    return this.institutionRepo.deleteCourse(courseId, institutionId);
   }
 
   async assignTeacherToCourse(courseId, teacherId, institutionId) {

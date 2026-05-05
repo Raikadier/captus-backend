@@ -111,6 +111,7 @@ export default class InstitutionRepository {
       .from('courses')
       .select(`
         id, title, description, invite_code, created_at,
+        teacher_id, grading_scale_id, period_id,
         teacher:users!courses_teacher_id_fkey(id, name, email),
         period:academic_periods(id, name),
         enrollments:course_enrollments(count)
@@ -119,6 +120,15 @@ export default class InstitutionRepository {
       .order('created_at', { ascending: false });
     if (error) throw error;
     return data;
+  }
+
+  async deleteCourse(courseId, institutionId) {
+    const { error } = await this.client
+      .from('courses')
+      .delete()
+      .eq('id', courseId)
+      .eq('institution_id', institutionId);
+    if (error) throw error;
   }
 
   async getCourseStudents(courseId) {
