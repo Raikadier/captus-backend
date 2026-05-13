@@ -40,8 +40,10 @@ import { getSupabaseClient } from './lib/supabaseAdmin.js';
 import { initFirebaseAdmin } from './lib/firebaseAdmin.js';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler.js';
 import logger from './lib/logger.js';
+import { initSentry, Sentry } from './lib/sentry.js';
 
 dotenv.config();
+initSentry();   // Must be called before any other code that could throw
 initFirebaseAdmin();
 
 const app = express();
@@ -184,6 +186,8 @@ app.get('/api', (_req, res) => res.json({ status: 'Running', docs: '/api-docs', 
 
 // ── 404 + Global error handler (must be last) ─────────────────────────────────
 app.use(notFoundHandler);
+// Sentry must capture errors before our custom handler formats the response
+app.use(Sentry.expressErrorHandler());
 app.use(errorHandler);
 
 export default app;
