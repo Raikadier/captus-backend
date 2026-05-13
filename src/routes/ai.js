@@ -2,125 +2,91 @@ import express from "express";
 import { routerAgent } from "../ai/routerAgent.js";
 import ConversationRepository from "../repositories/ConversationRepository.js";
 import MessageRepository from "../repositories/MessageRepository.js";
+import { validate } from "../middlewares/validate.js";
+import { AiChatSchema } from "../shared/schemas.js";
+import logger from "../lib/logger.js";
 
 const router = express.Router();
 const conversationRepo = new ConversationRepository();
 const messageRepo = new MessageRepository();
 
-// GET /ai/conversations - Get all recent conversations for the user (with lazy cleanup)
-router.get("/conversations", async (req, res) => {
+// GET /ai/conversations
+router.get("/conversations", async (req, res, next) => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "Usuario no autenticado" });
-    }
-
-    const conversations = await conversationRepo.getRecentByUserId(userId);
+    const conversations = await conversationRepo.getRecentByUserId(req.user.id);
     return res.json(conversations);
   } catch (err) {
-    console.error("[AI/conversations] error", err);
-    return res.status(500).json({ error: "Error al obtener conversaciones" });
+    next(err);
   }
 });
 
-// GET /ai/conversations/:id/messages - Get messages for a specific conversation
-router.get("/conversations/:id/messages", async (req, res) => {
+// GET /ai/conversations/:id/messages
+router.get("/conversations/:id/messages", async (req, res, next) => {
   try {
-    const userId = req.user?.id;
-    const conversationId = req.params.id;
-
-    if (!userId) {
-      return res.status(401).json({ error: "Usuario no autenticado" });
+    const conversation = await conversationRepo.getById(req.params.id);
+    if (!conversation || conversation.userId !== req.user.id) {
+      return res.status(404).json({ success: false, error: { code: "NOT_FOUND", message: "Conversación no encontrada" } });
     }
-
-    // Verify ownership
-    const conversation = await conversationRepo.getById(conversationId);
-    if (!conversation || conversation.userId !== userId) {
-      return res.status(404).json({ error: "Conversación no encontrada" });
-    }
-
-    const messages = await messageRepo.getByConversationId(conversationId);
+    const messages = await messageRepo.getByConversationId(req.params.id);
     return res.json(messages);
   } catch (err) {
-    console.error("[AI/messages] error", err);
-    return res.status(500).json({ error: "Error al obtener mensajes" });
+    next(err);
   }
 });
 
-// POST /ai/chat - Send a message
-router.post("/chat", async (req, res) => {
+// POST /ai/chat
+router.post("/chat", validate(AiChatSchema), async (req, res, next) => {
   try {
-    const userId = req.user?.id;
-    const { message, conversationId: providedConversationId } = req.body || {};
+    const userId = req.user.id;
+    const { message, conversationId: providedConversationId } = req.body;
 
-    if (!userId) {
-      return res.status(401).json({ error: "Usuario no autenticado" });
-    }
-    if (typeof message !== "string" || !message.trim()) {
-      return res.status(400).json({ error: "message debe ser texto" });
-    }
-
-    console.info("[AI/chat] request", { userId, preview: message.slice(0, 80), conversationId: providedConversationId });
+    logger.info("[AI/chat] request", { userId, preview: message.slice(0, 80) });
 
     let conversationId = providedConversationId;
     let isNewConversation = false;
 
-    // 1. Create or validate conversation
     if (!conversationId) {
-      const newConv = await conversationRepo.create(userId); // Title default is 'Nueva conversación'
+      const newConv = await conversationRepo.create(userId);
       conversationId = newConv.id;
       isNewConversation = true;
     } else {
-      // Verify ownership if ID provided
       const existing = await conversationRepo.getById(conversationId);
       if (!existing || existing.userId !== userId) {
-        // If invalid ID, treat as new conversation
         const newConv = await conversationRepo.create(userId);
         conversationId = newConv.id;
         isNewConversation = true;
       }
     }
 
-    // 2. Fetch prior history before saving current message
     const priorMessages = isNewConversation
       ? []
       : await messageRepo.getByConversationId(conversationId);
 
-    // 3. Save User Message
     await messageRepo.create(conversationId, "user", message);
 
-    // 4. Update Title if it's the first user message
     if (isNewConversation) {
       const title = message.slice(0, 50).trim() + (message.length > 50 ? "..." : "");
       await conversationRepo.updateTitle(conversationId, title);
     }
 
-    // 5. Get AI Response
     const userRole = req.user?.role || "student";
     const responseObj = await routerAgent(message, userId, priorMessages, userRole);
 
     const resultText = typeof responseObj?.result === "string"
       ? responseObj.result
-      : typeof responseObj === "string"
-        ? responseObj
-        : "";
+      : typeof responseObj === "string" ? responseObj : "";
 
     const actionPerformed = responseObj?.actionPerformed || null;
-    const toolData = responseObj?.data || null;
+    const toolData        = responseObj?.data || null;
+    const steps           = responseObj?.steps || [];
 
-    // 6. Save AI Message
     await messageRepo.create(conversationId, "bot", resultText);
 
-    console.info("[AI/chat] response", { userId, preview: resultText.slice(0, 80), actionPerformed });
+    logger.info("[AI/chat] response", { userId, preview: resultText.slice(0, 80), actionPerformed, steps: steps.length });
 
-    return res.json({ result: resultText, conversationId, actionPerformed, data: toolData });
+    return res.json({ result: resultText, conversationId, actionPerformed, data: toolData, steps });
   } catch (err) {
-    console.error("[AI/chat] error", err);
-    return res.status(500).json({
-      error: "Error en IA",
-      detail: err?.message || String(err),
-      stack: err?.stack?.split("\n").slice(0, 5),
-    });
+    next(err);
   }
 });
 

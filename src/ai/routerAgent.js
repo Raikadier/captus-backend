@@ -3,32 +3,56 @@ import { allowedIntents, buildRouterSystemPrompt } from "./prompts.js";
 import { orchestrator } from "./orchestrator.js";
 import { extractJson } from "./utils/json.js";
 import { fetchContextForIntent } from "./context.js";
+import { requireSupabaseClient } from "../lib/supabaseAdmin.js";
+
+// Fetch basic profile once per request — name + institution for personalisation.
+const fetchUserProfile = async (userId) => {
+  try {
+    const supabase = requireSupabaseClient();
+    const { data } = await supabase
+      .from("users")
+      .select("name, role, institutions!users_institution_id_fkey(name)")
+      .eq("id", userId)
+      .single();
+
+    if (!data) return null;
+    return {
+      name:        data.name ?? null,
+      role:        data.role ?? "student",
+      institution: data.institutions?.name ?? null,
+    };
+  } catch {
+    return null;
+  }
+};
 
 export const routerAgent = async (message, userId, conversationHistory = [], userRole = "student") => {
   const started = Date.now();
 
-  // 1. Clasificación rápida con Gemini Flash
-  const classification = await createChatCompletion({
-    model: MODEL_FAST,
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: buildRouterSystemPrompt() },
-      { role: "user", content: message },
-    ],
-    temperature: 0.1,
-  }, { purpose: "fast" });
+  // 1. Fetch user profile + classify intent in parallel
+  const [profileResult, classification] = await Promise.all([
+    fetchUserProfile(userId),
+    createChatCompletion({
+      model: MODEL_FAST,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: buildRouterSystemPrompt() },
+        { role: "user", content: message },
+      ],
+      temperature: 0.1,
+    }, { purpose: "fast" }),
+  ]);
 
   const rawContent = classification.choices?.[0]?.message?.content || "{}";
   const parsed = extractJson(rawContent) || {};
   const intent = allowedIntents.includes(parsed.intent) ? parsed.intent : "general";
 
   // 2. Pre-fetch de datos (RAG-lite)
-  // Si el usuario pregunta "¿Qué tareas tengo?", traemos las tareas y las inyectamos.
-  // Esto evita que el orquestador tenga que llamar a la tool "list_tasks".
   const dynamicContext = await fetchContextForIntent(intent, userId, userRole);
 
   console.info("[AI/router] classified", {
     userId,
+    userName: profileResult?.name,
     intent,
     hasContext: !!dynamicContext,
     ms: Date.now() - started,
@@ -41,5 +65,6 @@ export const routerAgent = async (message, userId, conversationHistory = [], use
     contextData: dynamicContext,
     conversationHistory,
     userRole,
+    userProfile: profileResult,
   });
 };
