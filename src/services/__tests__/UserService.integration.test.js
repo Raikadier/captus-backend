@@ -32,7 +32,7 @@ describe('UserService Integration Tests', () => {
         role: 'student',
         created_at: '2024-01-01T00:00:00Z',
         updated_at: '2024-01-01T00:00:00Z',
-        carrer: 'Computer Science',
+        career: 'Computer Science',
         bio: 'Test bio',
         avatar_url: 'https://example.com/avatar.png'
     };
@@ -315,7 +315,7 @@ describe('UserService Integration Tests', () => {
                 const updatedFields = {
                     name: 'New Name',
                     bio: 'New Bio',
-                    carrer: 'New Career'
+                    career: 'New Career'
                 };
 
                 mockUserRepo.getById.mockResolvedValue(testUser);
@@ -325,7 +325,7 @@ describe('UserService Integration Tests', () => {
 
                 expect(result.name).toBe('New Name');
                 expect(result.bio).toBe('New Bio');
-                expect(result.carrer).toBe('New Career');
+                expect(result.career).toBe('New Career');
             });
         });
     });

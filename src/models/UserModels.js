@@ -6,7 +6,7 @@ export default class User {
     role = 'student',
     created_at = null,
     updated_at = null,
-    carrer = null,
+    career = null,
     bio = null,
     avatar_url = null
   }) {
@@ -16,7 +16,7 @@ export default class User {
     this.role = role;
     this.created_at = created_at;
     this.updated_at = updated_at;
-    this.carrer = carrer;
+    this.career = career;
     this.bio = bio;
     this.avatar_url = avatar_url;
   }
@@ -29,7 +29,7 @@ export default class User {
       role: row.role || 'student', // Fallback if column is missing momentarily
       created_at: row.created_at,
       updated_at: row.updated_at,
-      carrer: row.carrer,
+      career: row.career,
       bio: row.bio,
       avatar_url: row.avatar_url
     });
@@ -61,7 +61,7 @@ export default class User {
     // Optional fields - only add if they have values to avoid overwriting with null if not intended
     // However, for a sync, we might want to be explicit.
     // Let's keep it simple:
-    if (this.carrer) dbObj.carrer = this.carrer;
+    if (this.career) dbObj.career = this.career;
     if (this.bio) dbObj.bio = this.bio;
     if (this.avatar_url) dbObj.avatar_url = this.avatar_url;
 
