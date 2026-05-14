@@ -6,7 +6,7 @@ const mapFromDb = (row) => ({
   userName: row.name || row.email?.split('@')[0],
   email: row.email,
   name: row.name,
-  carrer: row.carrer,
+  career: row.career,
   bio: row.bio,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
@@ -16,7 +16,7 @@ const mapToDb = (entity) => ({
   id: entity.id || entity.id_User, // Accept either
   email: entity.email,
   name: entity.name || entity.userName,
-  carrer: entity.carrer,
+  career: entity.career,
   bio: entity.bio,
   created_at: entity.createdAt || entity.created_at || new Date(), // Handle both camelCase and snake_case inputs
   updated_at: entity.updatedAt || entity.updated_at || new Date(),
