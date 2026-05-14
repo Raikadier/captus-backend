@@ -1,0 +1,80 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+
+    env:
+      NODE_ENV: test
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Security audit
+        run: npm audit --audit-level=high
+        continue-on-error: true   # report but don't block
+
+      - name: Lint (ESLint)
+        run: npx eslint src/ --ext .js --max-warnings 0
+
+      - name: Run tests
+        run: npm test -- --coverage --forceExit
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage/lcov.info
+          fail_ci_if_error: false
+
+  verify-startup:
+    name: Verify app loads
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify app module loads without errors
+        run: |
+          timeout 10 node --input-type=module <<'EOF' || exit 1
+          import './src/app.js';
+          console.log('app loaded OK');
+          EOF
+        env:
+          NODE_ENV: test
+          SUPABASE_URL: https://placeholder.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: placeholder
