@@ -8,27 +8,22 @@ const userController = new UserController();
 const supabaseAdmin = getSupabaseClient();
 const verifySupabaseToken = buildSupabaseAuthMiddleware(supabaseAdmin);
 
-// Rutas públicas
-// check-email se mantiene pública para validaciones de registro
+// ── Public routes (no auth required) ─────────────────────────────────────────
 router.post("/check-email", userController.isEmailRegistered.bind(userController));
 
-// Rutas protegidas (requieren token)
+// ── Protected routes (auth required) ─────────────────────────────────────────
 router.use(verifySupabaseToken);
 
-// Endpoint de Sincronización (Tu nueva feature)
-router.post("/sync", userController.syncUser.bind(userController));
+router.post("/sync",    userController.syncUser.bind(userController));
+router.get("/profile",  userController.getProfile.bind(userController));
 
-// Gestión de Perfil
-router.get("/profile", userController.getProfile.bind(userController));
-router.get("/:id", userController.getProfile.bind(userController));
-router.put("/:id", userController.updateProfile.bind(userController));
-
-// Rutas preservadas de Main (útiles)
+// IMPORTANT: specific named routes MUST come before wildcard /:id routes,
+// otherwise Express matches /:id first and these handlers are never reached.
 router.put("/change-password", userController.changePassword.bind(userController));
-router.delete("/account", userController.deleteAccount.bind(userController));
+router.delete("/account",      userController.deleteAccount.bind(userController));
 
-// Legacy/Teammate routes preserved
-router.delete("/account", userController.deleteAccount.bind(userController));
-router.post("/check-email", userController.isEmailRegistered.bind(userController));
+// Wildcard routes last (catch-all by id)
+router.get("/:id",  userController.getProfile.bind(userController));
+router.put("/:id",  userController.updateProfile.bind(userController));
 
 export default router;
