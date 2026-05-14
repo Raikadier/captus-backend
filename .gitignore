@@ -1,8 +1,8 @@
 # Dependencies
 node_modules/
 
-# Lockfiles
-package-lock.json
+# Lockfiles are committed for reproducible CI builds
+# package-lock.json
 
 # Logs
 *.log
