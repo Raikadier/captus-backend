@@ -68,12 +68,14 @@ describe("orchestrator fallback behavior", () => {
   });
 
   it("executes tool call and returns rendered tool result", async () => {
+    // Step 1: model returns a tool call
     createMock.mockResolvedValueOnce({
       choices: [
         {
           message: {
             tool_calls: [
               {
+                id: "call_1",
                 function: {
                   name: "create_task",
                   arguments: JSON.stringify({ title: "Parcial", due_date: "2026-05-01T10:00:00Z" }),
@@ -87,6 +89,10 @@ describe("orchestrator fallback behavior", () => {
     executeToolMock.mockResolvedValueOnce(
       new OperationResult(true, "Tarea creada", { id: 10 })
     );
+    // Step 2: model returns the final text after seeing the tool result
+    createMock.mockResolvedValueOnce({
+      choices: [{ message: { content: "Tarea creada" } }],
+    });
 
     const result = await orchestrator({
       message: "Crea una tarea para parcial",

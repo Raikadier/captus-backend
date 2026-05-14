@@ -5,22 +5,6 @@ class NotificationController {
   async getNotifications(req, res) {
     try {
       const userId = req.user.id;
-      const notifications = await NotificationService.repo.getAll({ user_id: userId });
-      // Repository getAll might not support ordering by default based on BaseRepository, so we might need a custom method or accept that BaseRepository needs extension.
-      // BaseRepository.getAll does simple eq/is matching. To order, we should ideally extend NotificationRepository.
-      // However, for now, let's stick to the existing pattern or extend the repo if needed.
-      // Looking at BaseRepository, it doesn't support ordering.
-      // Let's assume for this iteration we fetch all and sort in memory or add a method to NotificationRepository.
-
-      // Better: use a custom method in NotificationRepository. But first let's try to see if we can just use the service or repo directly in a clean way.
-      // To avoid raw supabase queries here, we should use the repo.
-      // Let's fix NotificationRepository to support this query.
-
-      // Actually, let's check if we can add a method to NotificationRepository for this.
-      // Since I can't easily switch context to write that file right now without breaking the flow of this file writing,
-      // I will rely on the fact that I can update NotificationRepository in the next step if I want to be 100% pure.
-      // But to keep it simple and robust:
-
       const { type, unread, limit = 50 } = req.query;
 
       let query = NotificationService.repo.client

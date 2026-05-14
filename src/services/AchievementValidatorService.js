@@ -1,13 +1,10 @@
 import { achievements } from "../shared/achievementsConfig.js";
 import UserAchievementsRepository from "../repositories/UserAchievementsRepository.js";
 import TaskRepository from "../repositories/TaskRepository.js";
-import StatisticsRepository from "../repositories/StatisticsRepository.js";
 import { requireSupabaseClient } from "../lib/supabaseAdmin.js";
-import NotificationService from './NotificationService.js';
 
 const userAchievementsRepository = new UserAchievementsRepository();
 const taskRepository = new TaskRepository();
-const statisticsRepository = new StatisticsRepository();
 
 export class AchievementValidatorService {
   constructor() {

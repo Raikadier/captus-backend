@@ -3,7 +3,7 @@ import { NotesService } from "../services/NotesService.js";
 import { EventsService } from "../services/EventsService.js";
 import EventsRepository from "../repositories/EventsRepository.js";
 import CourseService from "../services/CourseService.js";
-import SubmissionService from "../services/SubmissionService.js";
+// SubmissionService reserved for future student-submission tools
 import EnrollmentService from "../services/EnrollmentService.js";
 import AssignmentRepository from "../repositories/AssignmentRepository.js";
 import SubmissionRepository from "../repositories/SubmissionRepository.js";
@@ -17,7 +17,8 @@ const notesService    = new NotesService();
 // FIX: EventsService requires repository injection — instantiate with EventsRepository
 const eventsService   = new EventsService(new EventsRepository());
 const courseService   = new CourseService();
-const submissionService = new SubmissionService();
+// submissionService reserved for future student-submission tools
+// const submissionService = new SubmissionService();
 const enrollmentService = new EnrollmentService();
 const assignmentRepo  = new AssignmentRepository();
 const submissionRepo  = new SubmissionRepository();
@@ -338,7 +339,7 @@ export const toolRegistry = {
       },
       required: ["content", "type"],
     },
-    handler: async (args, userId) => {
+    handler: async (args) => {
       const { content, type, subject, language = "español" } = args;
 
       if (!content || content.trim().length < 50) {

@@ -60,7 +60,7 @@ Si no estás seguro, usa intent "general".
 // ── Orchestrator prompt ───────────────────────────────────────────────────────
 
 export const buildOrchestratorSystemPrompt = ({
-  userId,
+  userId: _userId = undefined, // eslint-disable-line no-unused-vars
   intent,
   contextData,
   userRole = "student",

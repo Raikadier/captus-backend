@@ -10,7 +10,7 @@ export const extractJson = (raw) => {
   // Try direct parse first
   try {
     return JSON.parse(cleaned);
-  } catch (_) {
+  } catch {
     // Try to recover first JSON-like object in string
     const match = cleaned.match(/\{[\s\S]*\}/m);
     if (!match) return null;

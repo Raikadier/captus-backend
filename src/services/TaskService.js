@@ -517,9 +517,11 @@ export class TaskService {
           categoryId = category.id_Category;
         }
       }
-    } catch (error) {
-      console.error("Error obteniendo IDs de prioridad y categoría:", error);
+    } catch (err) {
+      console.error("Error obteniendo IDs de prioridad y categoría:", err);
     }
+
+    return { priorityId, categoryId };
   }
 
   async loadTaskRelations(task) {
@@ -531,7 +533,7 @@ export class TaskService {
       if (categoryId) {
         try {
           task.Category = await this.categoryRepository.getById(task.id_Category);
-        } catch (error) {
+        } catch {
           task.Category = null;
         }
       }
@@ -539,7 +541,7 @@ export class TaskService {
       if (priorityId) {
         try {
           task.Priority = await this.priorityRepository.getById(task.id_Priority);
-        } catch (error) {
+        } catch {
           task.Priority = null;
         }
       }

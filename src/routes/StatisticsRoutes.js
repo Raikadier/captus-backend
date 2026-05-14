@@ -1,15 +1,10 @@
 import express from "express";
 import { StatisticsController } from "../controllers/StatisticsController.js";
-import buildSupabaseAuthMiddleware from "../middlewares/verifySupabaseToken.js";
-import { getSupabaseClient } from "../lib/supabaseAdmin.js";
 
 const router = express.Router();
 const statisticsController = new StatisticsController();
-const supabaseAdmin = getSupabaseClient();
-const verifySupabaseToken = buildSupabaseAuthMiddleware(supabaseAdmin);
 
-// Aplicar middleware de autenticación y usuario a todas las rutas
-// router.use(verifySupabaseToken); // Middleware is already applied in server.js
+// Auth is applied in app.js via verifySupabaseToken
 router.use(statisticsController.injectUser);
 
 // Rutas de estadísticas

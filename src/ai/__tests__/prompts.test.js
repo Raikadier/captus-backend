@@ -93,9 +93,10 @@ describe('buildOrchestratorSystemPrompt', () => {
     expect(prompt.length).toBeGreaterThan(100);
   });
 
-  it('includes the userId in the prompt', () => {
+  it('includes the role in the prompt', () => {
+    // userId is no longer included verbatim; role is used to personalise the prompt
     const prompt = buildOrchestratorSystemPrompt(BASE_ARGS);
-    expect(prompt).toContain('user-123');
+    expect(prompt).toContain('student');
   });
 
   it('includes the resolved context prefix', () => {
