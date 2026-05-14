@@ -37,12 +37,10 @@ export const MODEL_FAST = "gemini-2.5-flash";
 /**
  * Reasoning model: tool orchestration, agentic loop, function calling.
  *
- * Uses gemini-2.0-flash (non-thinking) because gemini-2.5-flash is a thinking
- * model and thinking models DO NOT support tool_choice / function calling
- * reliably via the OpenAI-compatible endpoint — they return 400 when tools
- * are passed. gemini-2.0-flash has full, stable function-calling support.
+ * gemini-2.5-flash is the only available non-pro model on this API key.
+ * It supports function calling via the OpenAI-compatible endpoint.
  */
-export const MODEL_REASON = "gemini-2.0-flash";
+export const MODEL_REASON = "gemini-2.5-flash";
 
 /**
  * Study model: 1M-token context window for document ingestion.
