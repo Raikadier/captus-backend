@@ -95,7 +95,8 @@ export const orchestrator = async ({ message, userId, intent, contextData, conve
       model: MODEL_REASON,
       messages,
       tools: toolDefinitions,
-      tool_choice: "auto",
+      // tool_choice omitted: Gemini defaults to "auto" and some model versions
+      // reject the explicit parameter, causing a 400 on the OpenAI-compat layer.
       temperature: 0.2,
     }, { purpose: "reason" });
 
