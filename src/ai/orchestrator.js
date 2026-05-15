@@ -29,13 +29,13 @@ const renderOperationResult = (toolName, op) => {
   };
 };
 
-const tryRunToolFromJson = async ({ content, userId }) => {
+const tryRunToolFromJson = async ({ content, userId, userRole = "student" }) => {
   const parsed = extractJson(content);
   if (!parsed || !parsed.tool) return null;
   if (!toolRegistry[parsed.tool]) return new OperationResult(false, `Herramienta desconocida: ${parsed.tool}`);
 
   const args = parsed.input || parsed.args || parsed.arguments || {};
-  return await executeTool({ name: parsed.tool, args, userId });
+  return await executeTool({ name: parsed.tool, args, userId, userRole });
 };
 
 const MAX_HISTORY_MESSAGES = 20;
@@ -55,8 +55,8 @@ export const orchestrator = async ({ message, userId, intent, contextData, conve
   const historyMessages = mapHistory(conversationHistory);
 
   // Conversational path (no tool needed) → Gemini Flash (fast + cheap)
-  const replyWithFast = async () => {
-    const systemPrompt =
+  const replyWithFast = async (systemOverride) => {
+    const systemPrompt = systemOverride ??
       "Te llamas Captus. Eres un asistente académico amable y directo. " +
       "Responde de forma breve y útil en español.";
 
@@ -74,12 +74,12 @@ export const orchestrator = async ({ message, userId, intent, contextData, conve
   };
 
   if (intent === "general") {
-    const r = await replyWithFast();
+    const r = await replyWithFast(system);
     return { ...r, steps: [] };
   }
 
-  // ── Agentic loop: up to 4 iterations so LLM can chain tools (list → delete, etc.)
-  const MAX_STEPS = 4;
+  // MAX_STEPS = N tool calls + 1 final answer; 6 handles up to 5 chained tools.
+  const MAX_STEPS = 6;
   const messages = [
     { role: "system", content: system },
     ...historyMessages,
@@ -103,46 +103,58 @@ export const orchestrator = async ({ message, userId, intent, contextData, conve
     const aiMessage = response.choices?.[0]?.message;
     const duration = Date.now() - started;
 
+    if (!aiMessage) break; // Gemini returned no message — exit loop
     messages.push(aiMessage);
 
     // 1) Tool calls — execute and record as a reasoning step
     if (aiMessage?.tool_calls?.length) {
-      const call = aiMessage.tool_calls[0];
-      const toolName = call.function.name;
-      const args = normalizeToolArgs(call.function.arguments);
+      for (const call of aiMessage.tool_calls) {
+        const toolName = call.function.name;
+        const args = normalizeToolArgs(call.function.arguments);
 
-      console.info("[AI/orchestrator] tool_call", { userId, toolName, step, ms: duration });
-      const result = await executeTool({ name: toolName, args, userId });
+        console.info("[AI/orchestrator] tool_call", { userId, toolName, step, ms: Date.now() - started });
+        const result = await executeTool({ name: toolName, args, userId, userRole });
 
-      const success = result?.success !== false;
-      if (success) {
-        lastActionPerformed = toolName;
-        lastData = result?.data ?? null;
+        const success = result instanceof OperationResult ? result.success : false;
+        if (success) {
+          lastActionPerformed = toolName;
+          lastData = result?.data ?? null;
+        }
+
+        steps.push({ type: "tool", name: toolName, success, ms: Date.now() - started });
+
+        messages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify({
+            success,
+            message: result?.message ?? String(result),
+            data: result?.data ?? null,
+          }),
+        });
       }
-
-      steps.push({ type: "tool", name: toolName, success, ms: Date.now() - started });
-
-      messages.push({
-        role: "tool",
-        tool_call_id: call.id,
-        content: JSON.stringify({
-          success,
-          message: result?.message ?? String(result),
-          data: result?.data ?? null,
-        }),
-      });
       continue;
     }
 
     // 2) Final text response
     const content = aiMessage?.content?.trim() || "";
 
-    const jsonResult = await tryRunToolFromJson({ content, userId });
-    if (jsonResult) {
-      const toolName = extractJson(content)?.tool;
-      const rendered = renderOperationResult(toolName, jsonResult);
-      steps.push({ type: "tool", name: toolName, success: true, ms: Date.now() - started });
-      return { ...rendered, steps };
+    // Only attempt JSON-path tool execution if no tool_calls have fired yet.
+    // Prevents double-execution when the model narrates a tool call in its
+    // final text response after already having used tool_calls.
+    if (!steps.length) {
+      const jsonResult = await tryRunToolFromJson({ content, userId, userRole });
+      if (jsonResult) {
+        const toolName = extractJson(content)?.tool;
+        const rendered = renderOperationResult(toolName, jsonResult);
+        steps.push({
+          type: "tool",
+          name: toolName ?? "unknown",
+          success: jsonResult instanceof OperationResult ? jsonResult.success : jsonResult?.success !== false,
+          ms: Date.now() - started,
+        });
+        return { ...rendered, steps };
+      }
     }
 
     if (content) {
@@ -155,7 +167,7 @@ export const orchestrator = async ({ message, userId, intent, contextData, conve
 
   // Fallback
   console.info("[AI/orchestrator] fast_fallback", { userId, ms: Date.now() - started });
-  const fastResponse = await replyWithFast();
+  const fastResponse = await replyWithFast(system);
   if (fastResponse.result) return { ...fastResponse, steps };
   return { result: FALLBACK_RESPONSE, actionPerformed: lastActionPerformed, data: lastData, steps };
 };

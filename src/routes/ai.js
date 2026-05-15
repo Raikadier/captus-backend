@@ -40,7 +40,7 @@ router.post("/chat", validate(AiChatSchema), async (req, res, next) => {
     const userId = req.user.id;
     const { message, conversationId: providedConversationId } = req.body;
 
-    logger.info("[AI/chat] request", { userId, preview: message.slice(0, 80) });
+    logger.info("[AI/chat] request", { userId, length: message.length });
 
     let conversationId = providedConversationId;
     let isNewConversation = false;
@@ -52,9 +52,13 @@ router.post("/chat", validate(AiChatSchema), async (req, res, next) => {
     } else {
       const existing = await conversationRepo.getById(conversationId);
       if (!existing || existing.userId !== userId) {
-        const newConv = await conversationRepo.create(userId);
-        conversationId = newConv.id;
-        isNewConversation = true;
+        // The provided conversationId is invalid or belongs to another user.
+        // Return a clear error rather than silently creating a new conversation,
+        // which would cause unbounded orphan-conversation proliferation.
+        return res.status(400).json({
+          success: false,
+          error: { code: "INVALID_CONVERSATION", message: "Conversación no válida. Inicia una nueva." },
+        });
       }
     }
 
@@ -82,7 +86,7 @@ router.post("/chat", validate(AiChatSchema), async (req, res, next) => {
 
     await messageRepo.create(conversationId, "bot", resultText);
 
-    logger.info("[AI/chat] response", { userId, preview: resultText.slice(0, 80), actionPerformed, steps: steps.length });
+    logger.info("[AI/chat] response", { userId, length: resultText.length, actionPerformed, steps: steps.length });
 
     return res.json({ result: resultText, conversationId, actionPerformed, data: toolData, steps });
   } catch (err) {

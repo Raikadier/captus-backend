@@ -29,6 +29,7 @@ if (!geminiApiKey) {
 export const gemini = new OpenAI({
   apiKey: geminiApiKey || "missing-key",
   baseURL: geminiBaseURL,
+  timeout: 30_000, // 30 s — prevents agentic loop from hanging on Gemini spikes
 });
 
 /** Fast model: intent classification, conversational turns. */

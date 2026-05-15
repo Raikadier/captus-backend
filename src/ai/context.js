@@ -84,6 +84,10 @@ export const fetchContextForIntent = async (intent, userId, userRole = "student"
         );
       }
 
+      case "notifications":
+        // Tools not yet implemented; falls back to general conversation.
+        return null;
+
       case "study":
       default:
         // For study intent, the document content is sent inline — no pre-fetch.

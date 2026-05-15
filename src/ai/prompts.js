@@ -72,8 +72,9 @@ export const buildOrchestratorSystemPrompt = ({
     : "";
 
   // Personal greeting line — use name when available
-  const userName = userProfile?.name ?? null;
-  const institution = userProfile?.institution ?? null;
+  const sanitize = (s) => s ? String(s).replace(/[\n\r\t]/g, " ").trim().slice(0, 120) : null;
+  const userName    = sanitize(userProfile?.name ?? null);
+  const institution = sanitize(userProfile?.institution ?? null);
   const userLine = [
     userName   ? `Nombre: ${userName}`        : null,
     institution ? `Institución: ${institution}` : null,

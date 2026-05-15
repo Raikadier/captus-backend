@@ -252,7 +252,7 @@ export const toolRegistry = {
         start_date: validation.value.start_date,
         end_date: validation.value.end_date ?? null,
         type: validation.value.type || "personal",
-        notify: Boolean(args?.notify),
+        notify: validation.value.notify ?? false,
       };
       const result = await eventsService.save(payload, { id: userId });
       return wrapResult("create_event", result);
@@ -671,10 +671,7 @@ export const toolRegistry = {
           const topic = topicList[(week - 1) % topicList.length];
 
           for (let session = 1; session <= sessions_per_week; session++) {
-            const sessionDate = new Date(startDate);
-            sessionDate.setDate(
-              startDate.getDate() + weekOffset * 7 + (session - 1) * 2
-            );
+            const sessionDate = new Date(startDate.getTime() + (weekOffset * 7 + (session - 1) * 2) * 86_400_000);
 
             const eventResult = await eventsService.save(
               {
@@ -919,9 +916,11 @@ export const toolRegistry = {
       required: ["task_id"],
     },
     handler: async (args, userId) => {
-      const { task_id } = args;
-      if (!task_id) return new OperationResult(false, "task_id es requerido");
-      const result = await taskService.delete(task_id, { id: userId });
+      const validation = validateArgs(toolRegistry.delete_task.parameters, args);
+      if (!validation.ok) return new OperationResult(false, validation.errors.join("; "));
+      const { task_id } = validation.value;
+      if (!task_id) return new OperationResult(false, "ID de tarea requerido.");
+      const result = await taskService.delete(Number(task_id), { id: userId });
       return wrapResult("delete_task", result);
     },
   },
@@ -994,9 +993,11 @@ export const toolRegistry = {
       required: ["event_id"],
     },
     handler: async (args, userId) => {
-      const { event_id } = args;
-      if (!event_id) return new OperationResult(false, "event_id es requerido");
-      const result = await eventsService.delete(event_id, userId);
+      const validation = validateArgs(toolRegistry.delete_event.parameters, args);
+      if (!validation.ok) return new OperationResult(false, validation.errors.join("; "));
+      const { event_id } = validation.value;
+      if (!event_id) return new OperationResult(false, "ID de evento requerido.");
+      const result = await eventsService.delete(Number(event_id), userId);
       return wrapResult("delete_event", result);
     },
   },
@@ -1011,10 +1012,12 @@ export const toolRegistry = {
       required: ["note_id"],
     },
     handler: async (args, userId) => {
-      const { note_id } = args;
-      if (!note_id) return new OperationResult(false, "note_id es requerido");
+      const validation = validateArgs(toolRegistry.delete_note.parameters, args);
+      if (!validation.ok) return new OperationResult(false, validation.errors.join("; "));
+      const { note_id } = validation.value;
+      if (!note_id) return new OperationResult(false, "ID de nota requerido.");
       // NotesService.delete expects raw userId string (not wrapped object)
-      const result = await notesService.delete(note_id, userId);
+      const result = await notesService.delete(Number(note_id), userId);
       return wrapResult("delete_note", result);
     },
   },
@@ -1210,13 +1213,22 @@ export const toolDefinitions = Object.entries(toolRegistry).map(([name, tool]) =
   },
 }));
 
-export const executeTool = async ({ name, args, userId }) => {
+export const executeTool = async ({ name, args, userId, userRole = "student" }) => {
   const tool = toolRegistry[name];
   if (!tool) {
     return new OperationResult(false, `Herramienta desconocida: ${name}`);
   }
   if (!userId) {
     return new OperationResult(false, "Usuario requerido para ejecutar herramientas");
+  }
+
+  const TEACHER_ONLY_TOOLS = new Set([
+    "get_teacher_courses", "get_course_analytics", "get_at_risk_students",
+    "generate_grade_report", "generate_question_bank", "generate_rubric",
+    "generate_course_plan",
+  ]);
+  if (TEACHER_ONLY_TOOLS.has(name) && userRole !== "teacher") {
+    return new OperationResult(false, "Esta herramienta solo está disponible para docentes.");
   }
 
   try {

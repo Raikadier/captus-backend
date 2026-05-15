@@ -61,7 +61,7 @@ export const routerAgent = async (message, userId, conversationHistory = [], use
     ms: Date.now() - started,
   });
 
-  return orchestrator({
+  return await orchestrator({
     message,
     userId,
     intent,
