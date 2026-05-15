@@ -34,7 +34,10 @@ export const routerAgent = async (message, userId, conversationHistory = [], use
     fetchUserProfile(userId),
     createChatCompletion({
       model: MODEL_FAST,
-      response_format: { type: "json_object" },
+      // response_format omitted: Gemini 2.5 Flash rejects `json_object` on the
+      // OpenAI-compat layer (same issue as tool_choice in orchestrator).
+      // The system prompt already instructs the model to respond only with JSON,
+      // and extractJson() handles stripping any markdown fences from the output.
       messages: [
         { role: "system", content: buildRouterSystemPrompt() },
         { role: "user", content: message },

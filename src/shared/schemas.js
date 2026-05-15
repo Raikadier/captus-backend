@@ -13,7 +13,9 @@ export const AiChatSchema = z.object({
   message: z
     .string({ required_error: 'El mensaje es requerido.' })
     .min(1, 'El mensaje no puede estar vacío.')
-    .max(2000, 'El mensaje no puede superar 2000 caracteres.'),
+    // 4000 chars to accommodate study-mode messages:
+    // "Genera X del siguiente documento:\n\n{content}" where content ≤ 3000.
+    .max(4000, 'El mensaje no puede superar 4000 caracteres.'),
   conversationId: z.string().uuid().optional(),
 });
 
