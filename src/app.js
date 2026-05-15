@@ -49,6 +49,14 @@ initFirebaseAdmin();
 const app = express();
 const isProd = process.env.NODE_ENV === 'production';
 
+// ── Proxy trust ───────────────────────────────────────────────────────────────
+// Vercel (and most cloud platforms) sit behind one or more reverse proxies.
+// Without trust proxy, Express resolves req.ip to the proxy's internal IP,
+// which causes express-rate-limit v7+ to throw a ValidationError about
+// X-Forwarded-For misconfiguration — intermittently blocking requests with 400.
+// '1' = trust the first proxy hop (Vercel's edge layer).
+app.set('trust proxy', 1);
+
 // ── Security headers ──────────────────────────────────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: {
