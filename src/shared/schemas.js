@@ -16,7 +16,10 @@ export const AiChatSchema = z.object({
     // 4000 chars to accommodate study-mode messages:
     // "Genera X del siguiente documento:\n\n{content}" where content ≤ 3000.
     .max(4000, 'El mensaje no puede superar 4000 caracteres.'),
-  conversationId: z.string().uuid().optional(),
+  // conversations.id is a bigint in the DB, not a UUID.
+  // The client may send it as a string ("123") or a number (123).
+  // Coerce to string and accept any non-empty value.
+  conversationId: z.coerce.string().min(1).optional(),
 });
 
 // ── Tasks ──────────────────────────────────────────────────────────────────────
