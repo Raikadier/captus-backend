@@ -59,6 +59,27 @@ class ConversationRepository extends BaseRepository {
     }
   }
 
+  /** Delete a single conversation (and cascade its messages via DB FK). */
+  async deleteById(id, userId) {
+    const { error } = await this.client
+      .from(this.tableName)
+      .delete()
+      .eq('id', id)
+      .eq('user_id', userId); // ownership guard at DB level
+
+    if (error) throw new Error(error.message);
+  }
+
+  /** Delete ALL conversations for a user. */
+  async deleteAllByUserId(userId) {
+    const { error } = await this.client
+      .from(this.tableName)
+      .delete()
+      .eq('user_id', userId);
+
+    if (error) throw new Error(error.message);
+  }
+
   async getRecentByUserId(userId) {
     // Lazy cleanup: delete old conversations before fetching
     await this.deleteOldConversations(userId);

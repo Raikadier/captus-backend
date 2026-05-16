@@ -34,6 +34,30 @@ router.get("/conversations/:id/messages", async (req, res, next) => {
   }
 });
 
+// DELETE /ai/conversations — delete ALL conversations for the current user
+router.delete("/conversations", async (req, res, next) => {
+  try {
+    await conversationRepo.deleteAllByUserId(req.user.id);
+    return res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /ai/conversations/:id — delete a single conversation
+router.delete("/conversations/:id", async (req, res, next) => {
+  try {
+    const conversation = await conversationRepo.getById(req.params.id);
+    if (!conversation || conversation.userId !== req.user.id) {
+      return res.status(404).json({ success: false, error: { code: "NOT_FOUND", message: "Conversación no encontrada" } });
+    }
+    await conversationRepo.deleteById(req.params.id, req.user.id);
+    return res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /ai/chat
 router.post("/chat", validate(AiChatSchema), async (req, res, next) => {
   try {
