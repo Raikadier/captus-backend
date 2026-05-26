@@ -27,36 +27,65 @@ export const AiChatSchema = z.object({
 const PRIORITIES = ['low', 'medium', 'high', 'urgent'];
 const STATUSES   = ['pending', 'in_progress', 'completed'];
 
-export const CreateTaskSchema = z.object({
+// Accepts both camelCase (dueDate) and snake_case (due_date) from any client.
+// Normalises to snake_case before the service layer sees it.
+const _TaskFields = z.object({
   title:       shortStr('El título'),
   description: z.string().max(2000).optional(),
   priority:    z.enum(PRIORITIES, { message: `Prioridad debe ser: ${PRIORITIES.join(', ')}.` }).optional(),
   status:      z.enum(STATUSES).optional(),
   dueDate:     optionalIsoDate,
+  due_date:    optionalIsoDate,
   courseId:    z.string().optional(),
   groupId:     z.string().optional(),
 });
 
-export const UpdateTaskSchema = CreateTaskSchema.partial();
+const _normalizeTask = (d) => ({ ...d, due_date: d.due_date ?? d.dueDate });
+
+export const CreateTaskSchema = _TaskFields.transform(_normalizeTask);
+export const UpdateTaskSchema  = _TaskFields.partial().transform(_normalizeTask);
 
 // ── Events ─────────────────────────────────────────────────────────────────────
 
 const EVENT_TYPES = ['class', 'exam', 'assignment', 'personal', 'other'];
 
-const _EventBase = z.object({
+// Accepts both camelCase (startDate/endDate) and snake_case (start_date/end_date).
+// Normalises to snake_case before the service layer sees it.
+const _EventFields = z.object({
   title:       shortStr('El título'),
   description: z.string().max(2000).optional(),
-  startDate:   isoDate,
+  startDate:   isoDate.optional(),
+  start_date:  isoDate.optional(),
   endDate:     optionalIsoDate,
+  end_date:    optionalIsoDate,
   type:        z.enum(EVENT_TYPES).optional(),
   courseId:    z.string().optional(),
 });
 
-const _dateCheck = (d) => !d.endDate || !d.startDate || new Date(d.endDate) >= new Date(d.startDate);
-const _dateMsg   = { message: 'La fecha de fin no puede ser anterior a la de inicio.', path: ['endDate'] };
+const _hasStart  = (d) => !!(d.startDate || d.start_date);
+const _startMsg  = { message: 'La fecha de inicio es requerida.', path: ['start_date'] };
 
-export const CreateEventSchema = _EventBase.refine(_dateCheck, _dateMsg);
-export const UpdateEventSchema = _EventBase.partial().refine(_dateCheck, _dateMsg);
+const _dateCheck = (d) => {
+  const s = d.start_date ?? d.startDate;
+  const e = d.end_date   ?? d.endDate;
+  return !e || !s || new Date(e) >= new Date(s);
+};
+const _dateMsg = { message: 'La fecha de fin no puede ser anterior a la de inicio.', path: ['end_date'] };
+
+const _normalizeEvent = (d) => ({
+  ...d,
+  start_date: d.start_date ?? d.startDate,
+  end_date:   d.end_date   ?? d.endDate,
+});
+
+export const CreateEventSchema = _EventFields
+  .refine(_hasStart,  _startMsg)
+  .refine(_dateCheck, _dateMsg)
+  .transform(_normalizeEvent);
+
+export const UpdateEventSchema = _EventFields.partial()
+  .refine(_dateCheck, _dateMsg)
+  .transform(_normalizeEvent);
 
 // ── Notes ──────────────────────────────────────────────────────────────────────
 
