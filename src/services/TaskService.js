@@ -4,7 +4,7 @@ import PriorityRepository from "../repositories/PriorityRepository.js";
 import CategoryRepository from "../repositories/CategoryRepository.js";
 import StatisticsRepository from "../repositories/StatisticsRepository.js";
 import { OperationResult } from "../shared/OperationResult.js";
-import nodemailer from 'nodemailer';
+import { sendTaskNotification } from "./notifications/TaskEmailService.js";
 
 /**
  * Service for Task management.
@@ -427,6 +427,14 @@ export class TaskService {
     }
   }
 
+  /**
+   * NOTE — intentional dynamic import to break circular dependency.
+   * Dependency graph: StatisticsService → TaskService (static import)
+   *                   TaskService → StatisticsService (dynamic import here)
+   * Using `await import()` defers resolution until call-time, after both
+   * modules have fully initialised, preventing the circular-require deadlock
+   * that occurs with static ES module imports.
+   */
   async updateStatisticsOnCompletion(userId) {
     try {
       const { StatisticsService } = await import('./StatisticsService.js');
@@ -449,6 +457,11 @@ export class TaskService {
 
   async create(task) {
     return this.save(task);
+  }
+
+  /** Alias used by StatisticsService / StatisticsController */
+  async getCompletedToday(userId) {
+    return this.getCompletedTodayByUser(userId);
   }
 
   async complete(id, userContext = null) {
@@ -542,64 +555,8 @@ export class TaskService {
     }
   }
 
-  // Email notification methods
-  async sendTaskNotification(task, action, userContext = null) {
-    try {
-      if (process.env.DISABLE_EMAIL_NOTIFICATIONS === 'true') {
-        console.warn('Email notifications are disabled by DISABLE_EMAIL_NOTIFICATIONS');
-        return;
-      }
-      if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
-        console.warn('Gmail credentials not configured for task notifications');
-        return;
-      }
-
-      const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: process.env.GMAIL_USER,
-          pass: process.env.GMAIL_APP_PASSWORD,
-        },
-      });
-
-      const actionText = {
-        'created': 'creada',
-        'completed': 'completada',
-        'updated': 'actualizada'
-      }[action] || 'modificada';
-
-      const subject = `Tarea ${actionText}: ${task.title}`;
-      const html = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #16a34a;">Tarea ${actionText}</h2>
-          <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
-            <h3 style="margin: 0 0 10px 0; color: #1f2937;">${task.title}</h3>
-            ${task.description ? `<p style="margin: 5px 0; color: #4b5563;"><strong>Descripción:</strong> ${task.description}</p>` : ''}
-            ${task.endDate ? `<p style="margin: 5px 0; color: #4b5563;"><strong>Fecha límite:</strong> ${new Date(task.endDate).toLocaleDateString('es-ES')}</p>` : ''}
-            ${task.Category ? `<p style="margin: 5px 0; color: #4b5563;"><strong>Categoría:</strong> ${task.Category.name}</p>` : ''}
-            ${task.Priority ? `<p style="margin: 5px 0; color: #4b5563;"><strong>Prioridad:</strong> ${task.Priority.name}</p>` : ''}
-            <p style="margin: 10px 0; color: #16a34a; font-weight: bold;">Estado: ${task.state ? 'Completada ✅' : 'Pendiente ⏳'}</p>
-          </div>
-          <p style="color: #6b7280; font-size: 14px;">
-            Este es un recordatorio automático de Captus.
-          </p>
-        </div>
-      `;
-
-      await transporter.sendMail({
-        from: process.env.GMAIL_USER,
-        to: (typeof userContext === 'object' ? userContext?.email : null) || task.User?.email,
-        subject,
-        html,
-      });
-
-      console.log(`Task notification email sent for ${action} task: ${task.title}`);
-    } catch (error) {
-      if (error?.code === 'EAUTH') {
-        console.warn('Gmail authentication failed. Skipping email notification.');
-        return;
-      }
-      console.error('Error sending task notification:', error);
-    }
+  // Delegates to TaskEmailService — kept as method so call sites don't change
+  sendTaskNotification(task, action, userContext = null) {
+    return sendTaskNotification(task, action, userContext);
   }
 }
