@@ -1,5 +1,6 @@
 // src/controllers/StatisticsController.js
 import { StatisticsService } from "../services/StatisticsService.js";
+import { AchievementCheckService } from "../services/AchievementCheckService.js";
 import { TaskService } from "../services/TaskService.js";
 import SubTaskRepository from "../repositories/SubTaskRepository.js";
 import { requireSupabaseClient } from "../lib/supabaseAdmin.js";
@@ -7,6 +8,7 @@ import { requireSupabaseClient } from "../lib/supabaseAdmin.js";
 export class StatisticsController {
   constructor() {
     this.statisticsService = new StatisticsService();
+    this.achievementCheckService = new AchievementCheckService();
     this.taskService = new TaskService();
     this.subTaskRepository = new SubTaskRepository();
   }
@@ -40,7 +42,7 @@ export class StatisticsController {
 
   async checkAchievements(req, res) {
     if (!req.user || !req.user.id) return res.status(401).json({ success: false, message: "Unauthorized" });
-    await this.statisticsService.checkAchievements(req.user.id);
+    await this.achievementCheckService.checkAchievements(req.user.id);
     res.status(200).json({ success: true, message: "Achievements checked" });
   }
 
