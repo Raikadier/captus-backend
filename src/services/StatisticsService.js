@@ -1,6 +1,7 @@
 // src/service/StatisticsService.js
 import StatisticsRepository from "../repositories/StatisticsRepository.js";
 import UserAchievementsRepository from "../repositories/UserAchievementsRepository.js";
+import CategoryRepository from "../repositories/CategoryRepository.js";
 import { TaskService } from "./TaskService.js";
 import { SubjectService } from "./SubjectService.js";
 import { OperationResult } from "../shared/OperationResult.js";
@@ -9,6 +10,7 @@ import { requireSupabaseClient } from "../lib/supabaseAdmin.js";
 
 const statisticsRepository = new StatisticsRepository();
 const userAchievementsRepository = new UserAchievementsRepository();
+const categoryRepository = new CategoryRepository();
 const taskService = new TaskService();
 const subjectService = new SubjectService();
 
@@ -492,9 +494,7 @@ export class StatisticsService {
       );
 
       // Get category details
-      const categoryRepository = (await import('../repositories/CategoryRepository.js')).default;
-      const catRepo = new categoryRepository();
-      const categoryDetails = await catRepo.getById(favoriteCategory.id);
+      const categoryDetails = await categoryRepository.getById(favoriteCategory.id);
 
       if (!categoryDetails) return null;
 

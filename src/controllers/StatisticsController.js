@@ -1,21 +1,25 @@
 // src/controllers/StatisticsController.js
 import { StatisticsService } from "../services/StatisticsService.js";
+import { TaskService } from "../services/TaskService.js";
+import SubTaskRepository from "../repositories/SubTaskRepository.js";
 import { requireSupabaseClient } from "../lib/supabaseAdmin.js";
 
-const statisticsService = new StatisticsService();
-
 export class StatisticsController {
+  constructor() {
+    this.statisticsService = new StatisticsService();
+    this.taskService = new TaskService();
+    this.subTaskRepository = new SubTaskRepository();
+  }
+
   // Updated to use the enhanced getDashboardStats
   async getByUser(req, res) {
     if (!req.user || !req.user.id) return res.status(401).json({ success: false, message: "Unauthorized" });
 
-    // Prefer getDashboardStats for the frontend StatsPage
-    const result = await statisticsService.getDashboardStats(req.user.id);
+    const result = await this.statisticsService.getDashboardStats(req.user.id);
 
     if (result.success) {
       res.status(200).json(result.data);
     } else {
-      // Fallback or error handling
       res.status(401).json({ error: result.message });
     }
   }
@@ -23,26 +27,26 @@ export class StatisticsController {
   // Simple stats for HomePage
   async getHomePageStats(req, res) {
     if (!req.user || !req.user.id) return res.status(401).json({ success: false, message: "Unauthorized" });
-    const result = await statisticsService.getHomePageStats(req.user.id);
+    const result = await this.statisticsService.getHomePageStats(req.user.id);
     res.status(result.success ? 200 : 500).json(result);
   }
 
   async update(req, res) {
     if (!req.user || !req.user.id) return res.status(401).json({ success: false, message: "Unauthorized" });
     const stats = { ...req.body, id_User: req.user.id };
-    const result = await statisticsService.update(stats);
+    const result = await this.statisticsService.update(stats);
     res.status(result.success ? 200 : 400).json(result);
   }
 
   async checkAchievements(req, res) {
     if (!req.user || !req.user.id) return res.status(401).json({ success: false, message: "Unauthorized" });
-    await statisticsService.checkAchievements(req.user.id);
+    await this.statisticsService.checkAchievements(req.user.id);
     res.status(200).json({ success: true, message: "Achievements checked" });
   }
 
   async getAchievementsStats(req, res) {
     if (!req.user || !req.user.id) return res.status(401).json({ success: false, message: "Unauthorized" });
-    const result = await statisticsService.getAchievementsStats(req.user.id);
+    const result = await this.statisticsService.getAchievementsStats(req.user.id);
     res.status(result.success ? 200 : 401).json(result);
   }
 
@@ -50,42 +54,27 @@ export class StatisticsController {
     try {
       if (!req.user || !req.user.id) return res.status(401).json({ success: false, message: "Unauthorized" });
 
-      const stats = await statisticsService.getByCurrentUser(req.user.id);
+      const stats = await this.statisticsService.getByCurrentUser(req.user.id);
       if (!stats) {
         return res.status(404).json({ error: 'Statistics not found' });
       }
 
-      // Get tasks completed today
-      const taskService = (await import('../services/TaskService.js')).TaskService;
-      const taskSvc = new taskService();
-
-      const completedTodayResult = await taskSvc.getCompletedToday(req.user.id);
+      // Tasks completed today
+      const completedTodayResult = await this.taskService.getCompletedToday(req.user.id);
       const tasksCompletedToday = completedTodayResult.success ? completedTodayResult.data.length : 0;
 
-      // Get total subtasks completed (historical)
-      // Note: This iterates ALL tasks which is inefficient but preserving logic structure.
-      const allTasks = await taskSvc.getAll(req.user.id);
+      // Total subtasks completed (historical) — O(n) queries; acceptable for streak widget
+      const allTasks = await this.taskService.getAll(req.user.id);
       let totalSubTasksCompleted = 0;
       if (allTasks.success) {
-        const subTaskRepository = (await import('../repositories/SubTaskRepository.js')).default;
-        const subTaskRepo = new subTaskRepository();
         for (const task of allTasks.data) {
-          const subTasks = await subTaskRepo.getAllByTaskId(task.id_Task || task.id);
+          const subTasks = await this.subTaskRepository.getAllByTaskId(task.id_Task || task.id);
           totalSubTasksCompleted += subTasks.filter(st => st.state).length;
         }
       }
 
-      // Get motivational message
-      const motivationalMessages = await statisticsService.getMotivationalMessage(req.user.id);
-      // motivationalMessage returns a string or array?
-      // check implementation: returns getMotivationalMessage(streak) which likely returns array or string?
-      // actually `getMotivationalMessage` in `achievementsConfig` usually returns a string.
-      // But here in controller it does `randomMessage`.
-      // Let's assume it returns array based on usage.
-      // checking service: returns `getMotivationalMessage(streak)`
-      // If that returns a string, then `[Math.floor...]` on a string gets a char.
-      // We should verify `achievementsConfig.js` if possible, but for now assuming it works as before or we fix it if it breaks.
-      // Actually, if it returns a single string, we should just use it.
+      // Motivational message
+      const motivationalMessage = await this.statisticsService.getMotivationalMessage(req.user.id);
 
       const streakData = {
         currentStreak: stats.racha || 0,
@@ -93,7 +82,7 @@ export class StatisticsController {
         tasksCompletedToday,
         progressPercentage: Math.min((tasksCompletedToday / (stats.dailyGoal || 5)) * 100, 100),
         lastCompletedDate: stats.lastRachaDate,
-        motivationalMessage: motivationalMessages, // Assuming it returns the message directly
+        motivationalMessage,
         bestStreak: stats.bestStreak || 0,
         totalSubTasksCompleted
       };
@@ -105,7 +94,7 @@ export class StatisticsController {
     }
   }
 
-  // ✅ New endpoint for additional stats widgets - OPTIMIZED
+  // Additional stats widgets — all queries run in parallel
   async getAdditionalStats(req, res) {
     try {
       if (!req.user || !req.user.id) return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -117,7 +106,6 @@ export class StatisticsController {
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
 
-      // Run all count queries in parallel for maximum performance
       const [
         eventsResult,
         upcomingEventsResult,
@@ -131,18 +119,18 @@ export class StatisticsController {
         achievementsResult
       ] = await Promise.all([
         supabase.from('events').select('*', { count: 'exact', head: true }).eq('user_id', userId),
-        supabase.from('events').select('*', { count: 'exact', head: true }).eq('user_id', userId).gte('start_date', today.toISOString()), // Fixed date -> start_date
-        supabase.from('project').select('*', { count: 'exact', head: true }).eq('id_Creator', userId), // Fixed projects -> project, user_id -> id_Creator (Schema check needed)
-        supabase.from('project').select('*', { count: 'exact', head: true }).eq('id_Creator', userId), // Status check might be missing in schema
+        supabase.from('events').select('*', { count: 'exact', head: true }).eq('user_id', userId).gte('start_date', today.toISOString()),
+        supabase.from('project').select('*', { count: 'exact', head: true }).eq('id_Creator', userId),
+        supabase.from('project').select('*', { count: 'exact', head: true }).eq('id_Creator', userId),
         supabase.from('notes').select('*', { count: 'exact', head: true }).eq('user_id', userId),
         supabase.from('notes').select('*', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', weekAgo.toISOString()),
         supabase.from('categories').select('*', { count: 'exact', head: true }).eq('user_id', userId),
         supabase.from('tasks').select('priority_id').eq('user_id', userId),
-        supabase.from('tasks').select('created_at, due_date').eq('user_id', userId).not('due_date', 'is', null).eq('completed', true).order('created_at', { ascending: false }).limit(50), // Fixed endDate -> due_date
-        supabase.from('userAchievements').select('achievementId, unlockedAt').eq('id_User', userId).order('unlockedAt', { ascending: false }).limit(3) // Fixed user_achievements -> userAchievements, user_id -> id_User
+        supabase.from('tasks').select('created_at, due_date').eq('user_id', userId).not('due_date', 'is', null).eq('completed', true).order('created_at', { ascending: false }).limit(50),
+        supabase.from('userAchievements').select('achievementId, unlockedAt').eq('id_User', userId).order('unlockedAt', { ascending: false }).limit(3)
       ]);
 
-      // Process priority stats
+      // Priority stats
       const priorityStats = { high: 0, medium: 0, low: 0 };
       if (priorityDataResult.data) {
         priorityDataResult.data.forEach(task => {
@@ -153,7 +141,7 @@ export class StatisticsController {
         });
       }
 
-      // Calculate average completion time
+      // Average completion time
       let averageCompletionTime = 0;
       if (completedTasksResult.data && completedTasksResult.data.length > 0) {
         const times = completedTasksResult.data.map(task => {
@@ -164,7 +152,7 @@ export class StatisticsController {
         averageCompletionTime = times.length > 0 ? times.reduce((a, b) => a + b, 0) / times.length : 0;
       }
 
-      const additionalStats = {
+      res.status(200).json({
         totalEvents: eventsResult.count || 0,
         upcomingEvents: upcomingEventsResult.count || 0,
         completedEvents: (eventsResult.count || 0) - (upcomingEventsResult.count || 0),
@@ -176,19 +164,17 @@ export class StatisticsController {
         priorityStats,
         averageCompletionTime: parseFloat(averageCompletionTime.toFixed(1)),
         recentAchievements: achievementsResult.data || []
-      };
-
-      res.status(200).json(additionalStats);
+      });
     } catch (error) {
       console.error('Error getting additional stats:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }
 
-  // ✅ New method for /api/statistics/tasks
+  // /api/statistics/tasks
   async getTaskStats(req, res) {
     if (!req.user || !req.user.id) return res.status(401).json({ success: false, message: "Unauthorized" });
-    const result = await statisticsService.getTaskStatistics(req.user.id);
+    const result = await this.statisticsService.getTaskStatistics(req.user.id);
     if (result.success) {
       res.status(200).json(result.data);
     } else {
@@ -199,7 +185,7 @@ export class StatisticsController {
   async updateDailyGoal(req, res) {
     if (!req.user || !req.user.id) return res.status(401).json({ success: false, message: "Unauthorized" });
     const { dailyGoal } = req.body;
-    const result = await statisticsService.updateDailyGoal(dailyGoal, req.user.id);
+    const result = await this.statisticsService.updateDailyGoal(dailyGoal, req.user.id);
     res.status(result.success ? 200 : 400).json(result);
   }
 }
