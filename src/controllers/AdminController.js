@@ -1,8 +1,10 @@
 import AdminService from '../services/AdminService.js';
+import { OperationResult } from '../shared/OperationResult.js';
+import { ctrl } from '../shared/asyncHandler.js';
 
 const svc = new AdminService();
 
-// Helper to get institutionId from the authenticated admin
+/** Resolves the institutionId for the authenticated admin — throws if none. */
 async function resolveInstitutionId(req) {
   const inst = await svc.getMyInstitution(req.user.id);
   if (!inst) throw new Error('El administrador no tiene una institución asignada.');
@@ -13,237 +15,168 @@ export default class AdminController {
 
   // ── Institution ─────────────────────────────────────────────────────────
 
-  async getInstitution(req, res) {
-    try {
-      const inst = await svc.getMyInstitution(req.user.id);
-      if (!inst) return res.status(404).json({ error: 'Sin institución. Crea una primero.' });
-      res.json(inst);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  }
+  getInstitution = ctrl(async (req) => {
+    const inst = await svc.getMyInstitution(req.user.id);
+    if (!inst) throw new Error('Sin institución. Crea una primero.');
+    return inst;
+  }, { ok: 200, fail: 404 });
 
-  async createInstitution(req, res) {
-    try {
-      const inst = await svc.createInstitution(req.body, req.user.id);
-      res.status(201).json(inst);
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  createInstitution = ctrl(async (req) => {
+    return svc.createInstitution(req.body, req.user.id);
+  }, { ok: 201 });
 
-  async updateInstitution(req, res) {
-    try {
-      const inst = await svc.updateInstitution(req.params.id, req.body, req.user.id);
-      res.json(inst);
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  updateInstitution = ctrl(async (req) => {
+    return svc.updateInstitution(req.params.id, req.body, req.user.id);
+  });
 
-  async getDashboardStats(req, res) {
-    try {
-      const institutionId = await resolveInstitutionId(req);
-      const stats = await svc.getDashboardStats(institutionId);
-      res.json(stats);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  }
+  getDashboardStats = ctrl(async (req) => {
+    const institutionId = await resolveInstitutionId(req);
+    return svc.getDashboardStats(institutionId);
+  }, { ok: 200, fail: 500 });
 
   // ── Users ───────────────────────────────────────────────────────────────
 
-  async getMembers(req, res) {
-    try {
-      const institutionId = await resolveInstitutionId(req);
-      const { role } = req.query;
-      const members = await svc.getMembers(institutionId, role || null);
-      res.json(members);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  }
+  getMembers = ctrl(async (req) => {
+    const institutionId = await resolveInstitutionId(req);
+    return svc.getMembers(institutionId, req.query.role || null);
+  }, { ok: 200, fail: 500 });
 
-  async inviteUser(req, res) {
-    try {
-      const institutionId = await resolveInstitutionId(req);
-      const { email, role } = req.body;
-      if (!email) return res.status(400).json({ error: 'El email es requerido.' });
-      const user = await svc.inviteUserByEmail(email, institutionId, role || 'student');
-      res.status(201).json(user);
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  inviteUser = ctrl(async (req) => {
+    const institutionId = await resolveInstitutionId(req);
+    const { email, role } = req.body;
+    if (!email) throw new Error('El email es requerido.');
+    return svc.inviteUserByEmail(email, institutionId, role || 'student');
+  }, { ok: 201 });
 
-  async removeUser(req, res) {
-    try {
-      const institutionId = await resolveInstitutionId(req);
-      await svc.removeUserFromInstitution(req.params.userId, institutionId);
-      res.json({ message: 'Usuario removido de la institución.' });
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  removeUser = ctrl(async (req) => {
+    const institutionId = await resolveInstitutionId(req);
+    await svc.removeUserFromInstitution(req.params.userId, institutionId);
+    return new OperationResult(true, 'Usuario removido de la institución.');
+  });
 
-  async changeUserRole(req, res) {
-    try {
-      const institutionId = await resolveInstitutionId(req);
-      const { role } = req.body;
-      const user = await svc.changeUserRole(req.params.userId, institutionId, role);
-      res.json(user);
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  changeUserRole = ctrl(async (req) => {
+    const institutionId = await resolveInstitutionId(req);
+    return svc.changeUserRole(req.params.userId, institutionId, req.body.role);
+  });
 
   // ── Courses ─────────────────────────────────────────────────────────────
 
-  async getCourses(req, res) {
-    try {
-      const institutionId = await resolveInstitutionId(req);
-      const courses = await svc.getInstitutionCourses(institutionId);
-      // Normalize: title→name, teacher{}→teacher_name/teacher_id for frontend
-      const normalized = courses.map(c => ({
-        ...c,
-        name:              c.title ?? c.name,
-        teacher_id:        c.teacher?.id   ?? c.teacher_id ?? null,
-        teacher_name:      c.teacher?.name ?? null,
-        grading_scale_id:  c.grading_scale_id ?? null,
-        enrollments_count: c.enrollments?.[0]?.count ?? 0,
-      }));
-      res.json(normalized);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  }
+  getCourses = ctrl(async (req) => {
+    const institutionId = await resolveInstitutionId(req);
+    const courses = await svc.getInstitutionCourses(institutionId);
+    return courses.map(c => ({
+      ...c,
+      name:              c.title ?? c.name,
+      teacher_id:        c.teacher?.id   ?? c.teacher_id ?? null,
+      teacher_name:      c.teacher?.name ?? null,
+      grading_scale_id:  c.grading_scale_id ?? null,
+      enrollments_count: c.enrollments?.[0]?.count ?? 0,
+    }));
+  }, { ok: 200, fail: 500 });
 
-  async deleteCourse(req, res) {
-    try {
-      const institutionId = await resolveInstitutionId(req);
-      await svc.deleteCourse(req.params.courseId, institutionId);
-      res.json({ message: 'Curso eliminado.' });
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  deleteCourse = ctrl(async (req) => {
+    const institutionId = await resolveInstitutionId(req);
+    await svc.deleteCourse(req.params.courseId, institutionId);
+    return new OperationResult(true, 'Curso eliminado.');
+  });
 
-  async createCourse(req, res) {
-    try {
-      const institutionId = await resolveInstitutionId(req);
-      const course = await svc.createCourseAsAdmin(req.body, req.user.id, institutionId);
-      res.status(201).json({ ...course, name: course.title ?? course.name });
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  createCourse = ctrl(async (req) => {
+    const institutionId = await resolveInstitutionId(req);
+    const course = await svc.createCourseAsAdmin(req.body, req.user.id, institutionId);
+    return { ...course, name: course.title ?? course.name };
+  }, { ok: 201 });
 
-  async updateCourse(req, res) {
-    try {
-      const institutionId = await resolveInstitutionId(req);
-      const course = await svc.updateCourse(req.params.courseId, req.body, institutionId);
-      res.json({ ...course, name: course.title ?? course.name });
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  updateCourse = ctrl(async (req) => {
+    const institutionId = await resolveInstitutionId(req);
+    const course = await svc.updateCourse(req.params.courseId, req.body, institutionId);
+    return { ...course, name: course.title ?? course.name };
+  });
 
-  async getCourseStudents(req, res) {
-    try {
-      const institutionId = await resolveInstitutionId(req);
-      const students = await svc.getCourseStudents(req.params.courseId, institutionId);
-      res.json(students);
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  getCourseStudents = ctrl(async (req) => {
+    const institutionId = await resolveInstitutionId(req);
+    return svc.getCourseStudents(req.params.courseId, institutionId);
+  });
 
-  async unenrollStudent(req, res) {
-    try {
-      const institutionId = await resolveInstitutionId(req);
-      await svc.unenrollStudent(req.params.courseId, req.params.studentId, institutionId);
-      res.json({ message: 'Estudiante desinscrito del curso.' });
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  unenrollStudent = ctrl(async (req) => {
+    const institutionId = await resolveInstitutionId(req);
+    await svc.unenrollStudent(req.params.courseId, req.params.studentId, institutionId);
+    return new OperationResult(true, 'Estudiante desinscrito del curso.');
+  });
 
-  async broadcastNotification(req, res) {
-    try {
-      const institutionId = await resolveInstitutionId(req);
-      const { title, body, role } = req.body;
-      const count = await svc.broadcastNotification(institutionId, { title, body, role });
-      res.json({ message: `Notificación enviada a ${count} miembros.`, count });
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  broadcastNotification = ctrl(async (req) => {
+    const institutionId = await resolveInstitutionId(req);
+    const { title, body, role } = req.body;
+    const count = await svc.broadcastNotification(institutionId, { title, body, role });
+    return new OperationResult(true, `Notificación enviada a ${count} miembros.`, { count });
+  });
 
-  async assignTeacher(req, res) {
-    try {
-      const institutionId = await resolveInstitutionId(req);
-      const { teacherId } = req.body;
-      if (!teacherId) return res.status(400).json({ error: 'teacherId es requerido.' });
-      const course = await svc.assignTeacherToCourse(req.params.courseId, teacherId, institutionId);
-      res.json(course);
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  assignTeacher = ctrl(async (req) => {
+    const institutionId = await resolveInstitutionId(req);
+    const { teacherId } = req.body;
+    if (!teacherId) throw new Error('teacherId es requerido.');
+    return svc.assignTeacherToCourse(req.params.courseId, teacherId, institutionId);
+  });
 
-  async bulkEnroll(req, res) {
-    try {
-      const institutionId = await resolveInstitutionId(req);
-      const { emails } = req.body;
-      if (!Array.isArray(emails) || !emails.length) {
-        return res.status(400).json({ error: 'Se requiere un array de emails.' });
-      }
-      const result = await svc.bulkEnrollStudents(req.params.courseId, emails, institutionId);
-      res.json(result);
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  bulkEnroll = ctrl(async (req) => {
+    const institutionId = await resolveInstitutionId(req);
+    const { emails } = req.body;
+    if (!Array.isArray(emails) || !emails.length) throw new Error('Se requiere un array de emails.');
+    return svc.bulkEnrollStudents(req.params.courseId, emails, institutionId);
+  });
 
   // ── Grading Scales ───────────────────────────────────────────────────────
 
-  async getGradingScales(req, res) {
-    try {
-      const institutionId = await resolveInstitutionId(req);
-      res.json(await svc.getGradingScales(institutionId));
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  }
+  getGradingScales = ctrl(async (req) => {
+    const institutionId = await resolveInstitutionId(req);
+    return svc.getGradingScales(institutionId);
+  }, { ok: 200, fail: 500 });
 
-  async createGradingScale(req, res) {
-    try {
-      const institutionId = await resolveInstitutionId(req);
-      res.status(201).json(await svc.createGradingScale(req.body, institutionId));
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  createGradingScale = ctrl(async (req) => {
+    const institutionId = await resolveInstitutionId(req);
+    return svc.createGradingScale(req.body, institutionId);
+  }, { ok: 201 });
 
-  async updateGradingScale(req, res) {
-    try {
-      const institutionId = await resolveInstitutionId(req);
-      res.json(await svc.updateGradingScale(req.params.scaleId, req.body, institutionId));
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  updateGradingScale = ctrl(async (req) => {
+    const institutionId = await resolveInstitutionId(req);
+    return svc.updateGradingScale(req.params.scaleId, req.body, institutionId);
+  });
 
-  async deleteGradingScale(req, res) {
-    try {
-      const institutionId = await resolveInstitutionId(req);
-      await svc.deleteGradingScale(req.params.scaleId, institutionId);
-      res.json({ message: 'Escala eliminada.' });
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  deleteGradingScale = ctrl(async (req) => {
+    const institutionId = await resolveInstitutionId(req);
+    await svc.deleteGradingScale(req.params.scaleId, institutionId);
+    return new OperationResult(true, 'Escala eliminada.');
+  });
 
-  async setDefaultGradingScale(req, res) {
-    try {
-      const institutionId = await resolveInstitutionId(req);
-      res.json(await svc.setDefaultGradingScale(req.params.scaleId, institutionId));
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  setDefaultGradingScale = ctrl(async (req) => {
+    const institutionId = await resolveInstitutionId(req);
+    return svc.setDefaultGradingScale(req.params.scaleId, institutionId);
+  });
 
   // ── Academic Periods ─────────────────────────────────────────────────────
 
-  async getPeriods(req, res) {
-    try {
-      const institutionId = await resolveInstitutionId(req);
-      res.json(await svc.getPeriods(institutionId));
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  }
+  getPeriods = ctrl(async (req) => {
+    const institutionId = await resolveInstitutionId(req);
+    return svc.getPeriods(institutionId);
+  }, { ok: 200, fail: 500 });
 
-  async createPeriod(req, res) {
-    try {
-      const institutionId = await resolveInstitutionId(req);
-      res.status(201).json(await svc.createPeriod(req.body, institutionId));
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  createPeriod = ctrl(async (req) => {
+    const institutionId = await resolveInstitutionId(req);
+    return svc.createPeriod(req.body, institutionId);
+  }, { ok: 201 });
 
-  async updatePeriod(req, res) {
-    try {
-      const institutionId = await resolveInstitutionId(req);
-      res.json(await svc.updatePeriod(req.params.periodId, req.body, institutionId));
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  updatePeriod = ctrl(async (req) => {
+    const institutionId = await resolveInstitutionId(req);
+    return svc.updatePeriod(req.params.periodId, req.body, institutionId);
+  });
 
-  async deletePeriod(req, res) {
-    try {
-      const institutionId = await resolveInstitutionId(req);
-      await svc.deletePeriod(req.params.periodId, institutionId);
-      res.json({ message: 'Periodo eliminado.' });
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  deletePeriod = ctrl(async (req) => {
+    const institutionId = await resolveInstitutionId(req);
+    await svc.deletePeriod(req.params.periodId, institutionId);
+    return new OperationResult(true, 'Periodo eliminado.');
+  });
 
-  async setActivePeriod(req, res) {
-    try {
-      const institutionId = await resolveInstitutionId(req);
-      res.json(await svc.setActivePeriod(req.params.periodId, institutionId));
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  setActivePeriod = ctrl(async (req) => {
+    const institutionId = await resolveInstitutionId(req);
+    return svc.setActivePeriod(req.params.periodId, institutionId);
+  });
 }

@@ -14,73 +14,57 @@ class NotificationController {
         .order('created_at', { ascending: false })
         .limit(parseInt(limit));
 
-      // Filter by type if provided
-      if (type) {
-        query = query.eq('type', type);
-      }
-
-      // Filter by read status if provided
-      if (unread !== undefined) {
-        const isUnread = unread === 'true';
-        query = query.eq('read', !isUnread);
-      }
+      if (type) query = query.eq('type', type);
+      if (unread !== undefined) query = query.eq('read', unread !== 'true');
 
       const { data, error } = await query;
-
       if (error) throw error;
-      res.json(data);
+
+      res.status(200).json({ success: true, data });
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ success: false, message: error.message });
     }
   }
 
   async markAsRead(req, res) {
     try {
-      const { id } = req.params;
-      const userId = req.user.id;
-
       const { error } = await NotificationService.repo.client
         .from('notifications')
         .update({ read: true })
-        .eq('id', id)
-        .eq('user_id', userId);
+        .eq('id', req.params.id)
+        .eq('user_id', req.user.id);
 
       if (error) throw error;
-      res.json({ success: true });
+      res.status(200).json({ success: true, message: 'Notificación marcada como leída.' });
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ success: false, message: error.message });
     }
   }
 
   async getPreferences(req, res) {
     try {
-      const userId = req.user.id;
-      const data = await NotificationService.prefsRepo.getForUser(userId);
-
-      if (!data) {
-         return res.json({
-             email_enabled: true,
-             whatsapp_enabled: false,
-             email: null,
-             whatsapp: null
-         });
-      }
-      res.json(data);
+      const data = await NotificationService.prefsRepo.getForUser(req.user.id);
+      res.status(200).json({
+        success: true,
+        data: data ?? {
+          email_enabled: true,
+          whatsapp_enabled: false,
+          email: null,
+          whatsapp: null
+        }
+      });
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ success: false, message: error.message });
     }
   }
 
   async updatePreferences(req, res) {
     try {
-      const userId = req.user.id;
       const { email_enabled, whatsapp_enabled, email, whatsapp } = req.body;
-
-      // Using upsert via client because BaseRepository update/save might not handle upsert elegantly with PK 'user_id' if it assumes auto-increment or different behavior
       const { data, error } = await NotificationService.prefsRepo.client
         .from('notification_preferences')
         .upsert({
-          user_id: userId,
+          user_id: req.user.id,
           email_enabled,
           whatsapp_enabled,
           email,
@@ -90,44 +74,39 @@ class NotificationController {
         .select();
 
       if (error) throw error;
-      res.json(data[0]);
+      res.status(200).json({ success: true, data: data[0] });
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ success: false, message: error.message });
     }
   }
 
   async checkDeadlines(req, res) {
     try {
-        await NotificationService.checkDeadlines();
-        res.json({ success: true, message: 'Deadlines checked' });
+      await NotificationService.checkDeadlines();
+      res.status(200).json({ success: true, message: 'Deadlines checked' });
     } catch (error) {
-        console.error('Deadline check failed:', error);
-        res.status(500).json({ error: error.message });
+      console.error('Deadline check failed:', error);
+      res.status(500).json({ success: false, message: error.message });
     }
   }
 
   async trigger(req, res) {
     try {
-        const userId = req.user.id;
-        // This endpoint allows triggering a manual notification (e.g. for testing or specific frontend actions)
-        // req.body: { title, body, type, metadata }
-        const { title, body, event_type, metadata, entity_id } = req.body;
+      const { title, body, event_type, metadata, entity_id } = req.body;
+      const result = await NotificationService.notify({
+        user_id: req.user.id,
+        title,
+        body,
+        event_type: event_type || 'manual_trigger',
+        entity_id: entity_id || 'manual',
+        metadata: metadata || {},
+        force: true
+      });
 
-        const result = await NotificationService.notify({
-            user_id: userId,
-            title,
-            body,
-            event_type: event_type || 'manual_trigger',
-            entity_id: entity_id || 'manual',
-            metadata: metadata || {},
-            force: true // Manual triggers might want to bypass duplicate checks
-        });
-
-        if (!result.success) throw new Error(result.error || result.reason);
-
-        res.json({ success: true });
+      if (!result.success) throw new Error(result.error || result.reason);
+      res.status(200).json({ success: true });
     } catch (error) {
-        res.status(400).json({ error: error.message });
+      res.status(400).json({ success: false, message: error.message });
     }
   }
 
@@ -135,32 +114,31 @@ class NotificationController {
 
   async registerDeviceToken(req, res) {
     try {
-      const userId = req.user?.id;
-      if (!userId) return res.status(401).json({ error: 'No autenticado' });
+      if (!req.user?.id) return res.status(401).json({ success: false, message: 'No autenticado' });
 
       const { token, platform } = req.body;
       if (!token || typeof token !== 'string') {
-        return res.status(400).json({ error: 'token es requerido' });
+        return res.status(400).json({ success: false, message: 'token es requerido' });
       }
 
-      await NotificationService.registerDeviceToken(userId, token, platform || 'android');
-      return res.json({ success: true });
+      await NotificationService.registerDeviceToken(req.user.id, token, platform || 'android');
+      res.status(200).json({ success: true });
     } catch (err) {
       console.error('[NotificationController] registerDeviceToken', err);
-      return res.status(500).json({ error: 'Error al registrar token' });
+      res.status(500).json({ success: false, message: 'Error al registrar token' });
     }
   }
 
   async unregisterDeviceToken(req, res) {
     try {
       const { token } = req.body;
-      if (!token) return res.status(400).json({ error: 'token es requerido' });
+      if (!token) return res.status(400).json({ success: false, message: 'token es requerido' });
 
       await NotificationService.unregisterDeviceToken(token);
-      return res.json({ success: true });
+      res.status(200).json({ success: true });
     } catch (err) {
       console.error('[NotificationController] unregisterDeviceToken', err);
-      return res.status(500).json({ error: 'Error al eliminar token' });
+      res.status(500).json({ success: false, message: 'Error al eliminar token' });
     }
   }
 }

@@ -20,7 +20,7 @@ export class StatisticsController {
     if (result.success) {
       res.status(200).json(result.data);
     } else {
-      res.status(401).json({ error: result.message });
+      res.status(400).json({ success: false, message: result.message });
     }
   }
 
@@ -56,7 +56,7 @@ export class StatisticsController {
 
       const stats = await this.statisticsService.getByCurrentUser(req.user.id);
       if (!stats) {
-        return res.status(404).json({ error: 'Statistics not found' });
+        return res.status(404).json({ success: false, message: 'Statistics not found' });
       }
 
       // Tasks completed today
@@ -90,7 +90,7 @@ export class StatisticsController {
       res.status(200).json(streakData);
     } catch (error) {
       console.error('Error getting streak stats:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
 
@@ -167,7 +167,7 @@ export class StatisticsController {
       });
     } catch (error) {
       console.error('Error getting additional stats:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
 
@@ -178,7 +178,7 @@ export class StatisticsController {
     if (result.success) {
       res.status(200).json(result.data);
     } else {
-      res.status(500).json({ error: result.message });
+      res.status(500).json({ success: false, message: result.message });
     }
   }
 

@@ -19,7 +19,7 @@ export class UserController {
     try {
       // req.user comes from verifySupabaseToken middleware
       if (!req.user || !req.user.id) {
-        return res.status(401).json({ error: 'Unauthorized' });
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
       }
 
       // The middleware gives us the auth user structure roughly
@@ -44,7 +44,7 @@ export class UserController {
   async getProfile(req, res) {
     try {
       const userId = req.params.id || req.user?.id;
-      if (!userId) return res.status(400).json({ error: 'User ID required' });
+      if (!userId) return res.status(400).json({ success: false, message: 'User ID required' });
 
       const user = await this.userService.getUserById(userId);
       res.status(200).json({ success: true, data: user });
@@ -58,7 +58,7 @@ export class UserController {
   async updateProfile(req, res) {
     try {
       const userId = req.params.id || req.user?.id;
-      if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+      if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
       const result = await this.userService.updateUser(userId, req.body);
       res.status(200).json({ success: true, data: result });
@@ -78,7 +78,7 @@ export class UserController {
   async deleteAccount(req, res) {
     try {
       const userId = req.user?.id;
-      if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+      if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
       const result = await this.userService.deleteAccount(userId);
       res.status(result.success ? 200 : 400).json(result);

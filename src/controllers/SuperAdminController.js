@@ -1,4 +1,6 @@
 import SuperAdminService from '../services/SuperAdminService.js';
+import { OperationResult } from '../shared/OperationResult.js';
+import { ctrl } from '../shared/asyncHandler.js';
 
 const svc = new SuperAdminService();
 
@@ -10,92 +12,60 @@ export default class SuperAdminController {
 
   // ── Platform stats ─────────────────────────────────────────────────────────
 
-  async getStats(req, res) {
-    try {
-      res.json(await svc.getPlatformStats());
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  }
+  getStats = ctrl(async () => {
+    return svc.getPlatformStats();
+  }, { ok: 200, fail: 500 });
 
   // ── Institutions ───────────────────────────────────────────────────────────
 
-  async listInstitutions(req, res) {
-    try {
-      const { page = 1, limit = 20, search = '' } = req.query;
-      res.json(await svc.listInstitutions({
-        page: +page, limit: Math.min(+limit, 100), search,
-      }));
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  }
+  listInstitutions = ctrl(async (req) => {
+    const { page = 1, limit = 20, search = '' } = req.query;
+    return svc.listInstitutions({ page: +page, limit: Math.min(+limit, 100), search });
+  }, { ok: 200, fail: 500 });
 
-  async getInstitution(req, res) {
-    try {
-      res.json(await svc.getInstitutionDetail(req.params.id));
-    } catch (e) { res.status(404).json({ error: e.message }); }
-  }
+  getInstitution = ctrl(async (req) => {
+    return svc.getInstitutionDetail(req.params.id);
+  }, { ok: 200, fail: 404 });
 
-  async updateInstitution(req, res) {
-    try {
-      const inst = await svc.updateInstitution(
-        req.params.id, req.body, req.user.id, clientIp(req),
-      );
-      res.json(inst);
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  updateInstitution = ctrl(async (req) => {
+    return svc.updateInstitution(req.params.id, req.body, req.user.id, clientIp(req));
+  });
 
-  async disableInstitution(req, res) {
-    try {
-      const { reason } = req.body;
-      if (!reason?.trim()) return res.status(400).json({ error: 'Se requiere un motivo para deshabilitar.' });
-      const inst = await svc.disableInstitution(
-        req.params.id, reason, req.user.id, clientIp(req),
-      );
-      res.json(inst);
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  disableInstitution = ctrl(async (req) => {
+    const { reason } = req.body;
+    if (!reason?.trim()) throw new Error('Se requiere un motivo para deshabilitar.');
+    return svc.disableInstitution(req.params.id, reason, req.user.id, clientIp(req));
+  });
 
-  async enableInstitution(req, res) {
-    try {
-      const inst = await svc.enableInstitution(req.params.id, req.user.id, clientIp(req));
-      res.json(inst);
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  enableInstitution = ctrl(async (req) => {
+    return svc.enableInstitution(req.params.id, req.user.id, clientIp(req));
+  });
 
   // ── Users (global) ─────────────────────────────────────────────────────────
 
-  async listUsers(req, res) {
-    try {
-      const { page = 1, limit = 20, search = '', role, institutionId } = req.query;
-      res.json(await svc.listUsers({
-        page: +page, limit: Math.min(+limit, 100),
-        search, role: role || null, institutionId: institutionId || null,
-      }));
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  }
+  listUsers = ctrl(async (req) => {
+    const { page = 1, limit = 20, search = '', role, institutionId } = req.query;
+    return svc.listUsers({
+      page: +page, limit: Math.min(+limit, 100),
+      search, role: role || null, institutionId: institutionId || null,
+    });
+  }, { ok: 200, fail: 500 });
 
-  async changeUserRole(req, res) {
-    try {
-      const { role } = req.body;
-      if (!role) return res.status(400).json({ error: 'El campo role es requerido.' });
-      const user = await svc.changeUserRole(
-        req.params.userId, role, req.user.id, clientIp(req),
-      );
-      res.json(user);
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  changeUserRole = ctrl(async (req) => {
+    const { role } = req.body;
+    if (!role) throw new Error('El campo role es requerido.');
+    return svc.changeUserRole(req.params.userId, role, req.user.id, clientIp(req));
+  });
 
-  async removeUser(req, res) {
-    try {
-      await svc.removeUserFromInstitution(req.params.userId, req.user.id, clientIp(req));
-      res.json({ message: 'Usuario removido de su institución.' });
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }
+  removeUser = ctrl(async (req) => {
+    await svc.removeUserFromInstitution(req.params.userId, req.user.id, clientIp(req));
+    return new OperationResult(true, 'Usuario removido de su institución.');
+  });
 
   // ── Audit log ──────────────────────────────────────────────────────────────
 
-  async getAuditLog(req, res) {
-    try {
-      const { page = 1, limit = 50 } = req.query;
-      res.json(await svc.getAuditLog({ page: +page, limit: Math.min(+limit, 200) }));
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  }
+  getAuditLog = ctrl(async (req) => {
+    const { page = 1, limit = 50 } = req.query;
+    return svc.getAuditLog({ page: +page, limit: Math.min(+limit, 200) });
+  }, { ok: 200, fail: 500 });
 }

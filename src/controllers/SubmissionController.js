@@ -24,46 +24,39 @@ export class SubmissionController {
 
   async submit(req, res) {
     try {
-      const studentId = req.user.id;
-      // req.body: { assignment_id, file_url, group_id (opt) }
-      const result = await this.service.submitAssignment(req.body, studentId);
-      res.status(201).json(result);
+      const data = await this.service.submitAssignment(req.body, req.user.id);
+      res.status(201).json({ success: true, data });
     } catch (error) {
-      res.status(400).json({ error: error.message });
+      res.status(400).json({ success: false, message: error.message });
     }
   }
 
   async getByAssignment(req, res) {
     try {
-      const { id } = req.params; // assignmentId
-      const userId = req.user.id;
       const role = req.user.role || 'student';
-      const result = await this.service.getSubmissions(id, userId, role);
-      res.json(result);
+      const data = await this.service.getSubmissions(req.params.id, req.user.id, role);
+      res.status(200).json({ success: true, data });
     } catch (error) {
-      res.status(403).json({ error: error.message });
+      res.status(403).json({ success: false, message: error.message });
     }
   }
 
   async grade(req, res) {
     try {
-      const { id } = req.params; // submissionId
       const { grade, feedback } = req.body;
-      const teacherId = req.user.id;
-      const result = await this.service.gradeSubmission(id, grade, feedback, teacherId);
-      res.json(result);
+      const data = await this.service.gradeSubmission(req.params.id, grade, feedback, req.user.id);
+      res.status(200).json({ success: true, data });
     } catch (error) {
-      res.status(400).json({ error: error.message });
+      res.status(400).json({ success: false, message: error.message });
     }
   }
 
   async getPendingReviews(req, res) {
     try {
-      const teacherId = req.user.id;
-      const result = await this.service.getPendingReviews(teacherId);
-      res.json(result);
+      const data = await this.service.getPendingReviews(req.user.id);
+      res.status(200).json({ success: true, data });
     } catch (error) {
-      res.status(400).json({ error: error.message });
+      res.status(400).json({ success: false, message: error.message });
     }
   }
 }
