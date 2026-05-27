@@ -8,9 +8,8 @@ const userAchievementsController = new UserAchievementsController();
 const supabaseAdmin = getSupabaseClient();
 const verifySupabaseToken = buildSupabaseAuthMiddleware(supabaseAdmin);
 
-// Aplicar middleware de autenticación y usuario a todas las rutas
+// Aplicar middleware de autenticación a todas las rutas
 router.use(verifySupabaseToken);
-router.use(userAchievementsController.injectUser);
 
 // Rutas de logros de usuario
 router.get("/my", userAchievementsController.getMyAchievements.bind(userAchievementsController));

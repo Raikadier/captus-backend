@@ -1,24 +1,17 @@
 import { SubjectService } from "../services/SubjectService.js";
 
-const subjectService = new SubjectService();
-
 export class SubjectController {
   constructor() {
-    this.injectUser = (req, res, next) => {
-      if (req.user) {
-        subjectService.setCurrentUser(req.user);
-      }
-      next();
-    };
+    this.subjectService = new SubjectService();
   }
 
   async getAll(req, res) {
-    const result = await subjectService.getAllByUser();
+    const result = await this.subjectService.getAllByUser(req.user.id);
     res.status(result.success ? 200 : 400).json(result);
   }
 
   async create(req, res) {
-    const result = await subjectService.create(req.body);
+    const result = await this.subjectService.create(req.body, req.user.id);
     res.status(result.success ? 201 : 400).json(result);
   }
 }

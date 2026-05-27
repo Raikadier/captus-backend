@@ -24,15 +24,10 @@ export class TaskService {
     this.priorityRepository = priorityRepo || new PriorityRepository();
     this.categoryRepository = categoryRepo || new CategoryRepository();
     this.statisticsRepository = statisticsRepo || new StatisticsRepository();
-    this.currentUser = null;
-  }
-
-  setCurrentUser(user) {
-    this.currentUser = user;
   }
 
   resolveUserId(user) {
-    if (!user) return this.currentUser?.id || this.currentUser?.user_id || null;
+    if (!user) return null;
     if (typeof user === "string") return user;
     return user.id || user.user_id || null;
   }
@@ -101,7 +96,7 @@ export class TaskService {
       await this.loadTaskRelations(savedTask);
 
       // Async notification
-      this.sendTaskNotification(savedTask, 'created').catch(error => {
+      this.sendTaskNotification(savedTask, 'created', userContext).catch(error => {
         console.error('Error enviando notificación de creación de tarea:', error);
       });
 
@@ -332,7 +327,7 @@ export class TaskService {
         await this.loadTaskRelations(updated);
 
         // Send notification email (non-blocking)
-        this.sendTaskNotification(updated, 'updated').catch(error => {
+        this.sendTaskNotification(updated, 'updated', userContext).catch(error => {
           console.error('Error sending task update notification:', error);
         });
 
@@ -421,7 +416,7 @@ export class TaskService {
 
         // Send completion notification email (non-blocking)
         await this.loadTaskRelations(task);
-        this.sendTaskNotification(task, 'completed').catch(error => {
+        this.sendTaskNotification(task, 'completed', userContext).catch(error => {
           console.error('Error sending task completion notification:', error);
         });
       }
@@ -436,8 +431,7 @@ export class TaskService {
     try {
       const { StatisticsService } = await import('./StatisticsService.js');
       const statsService = new StatisticsService();
-      statsService.setCurrentUser({ id: userId });
-      await statsService.updateFavoriteCategory();
+      await statsService.updateFavoriteCategory(userId);
     } catch (error) {
       console.error("Error actualizando categoría favorita:", error);
     }
@@ -445,11 +439,9 @@ export class TaskService {
 
   async updateStreakOnCompletion(userId) {
     try {
-      // Import StatisticsService dynamically to avoid circular dependency
       const { StatisticsService } = await import('./StatisticsService.js');
       const statsService = new StatisticsService();
-      statsService.setCurrentUser({ id: userId });
-      await statsService.checkStreak();
+      await statsService.checkStreak(userId);
     } catch (error) {
       console.error("Error actualizando racha:", error);
     }
@@ -551,7 +543,7 @@ export class TaskService {
   }
 
   // Email notification methods
-  async sendTaskNotification(task, action) {
+  async sendTaskNotification(task, action, userContext = null) {
     try {
       if (process.env.DISABLE_EMAIL_NOTIFICATIONS === 'true') {
         console.warn('Email notifications are disabled by DISABLE_EMAIL_NOTIFICATIONS');
@@ -596,7 +588,7 @@ export class TaskService {
 
       await transporter.sendMail({
         from: process.env.GMAIL_USER,
-        to: this.currentUser?.email,
+        to: (typeof userContext === 'object' ? userContext?.email : null) || task.User?.email,
         subject,
         html,
       });

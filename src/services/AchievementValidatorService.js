@@ -8,12 +8,7 @@ const taskRepository = new TaskRepository();
 
 export class AchievementValidatorService {
   constructor() {
-    this.currentUser = null;
     this.client = requireSupabaseClient();
-  }
-
-  setCurrentUser(user) {
-    this.currentUser = user;
   }
 
   /**

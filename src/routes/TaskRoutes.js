@@ -6,8 +6,6 @@ import { CreateTaskSchema, UpdateTaskSchema } from "../shared/schemas.js";
 const router = express.Router();
 const taskController = new TaskController();
 
-router.use(taskController.injectUser);
-
 router.get("/",                         taskController.getAll.bind(taskController));
 router.get("/pending",                  taskController.getPending.bind(taskController));
 router.get("/:id",                      taskController.getById.bind(taskController));

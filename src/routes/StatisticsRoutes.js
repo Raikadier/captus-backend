@@ -5,7 +5,6 @@ const router = express.Router();
 const statisticsController = new StatisticsController();
 
 // Auth is applied in app.js via verifySupabaseToken
-router.use(statisticsController.injectUser);
 
 // Rutas de estadísticas
 router.get("/", statisticsController.getByUser.bind(statisticsController));

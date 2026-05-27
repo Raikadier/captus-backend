@@ -9,7 +9,6 @@ const supabaseAdmin = getSupabaseClient();
 const verifySupabaseToken = buildSupabaseAuthMiddleware(supabaseAdmin);
 
 router.use(verifySupabaseToken);
-router.use(diagramController.injectUser);
 
 router.get("/", diagramController.getAll.bind(diagramController));
 router.post("/", diagramController.create.bind(diagramController));

@@ -5,13 +5,6 @@ import { requireSupabaseClient } from "../lib/supabaseAdmin.js";
 const statisticsService = new StatisticsService();
 
 export class StatisticsController {
-  constructor() {
-    this.injectUser = (req, res, next) => {
-      // Stateless - no op
-      next();
-    };
-  }
-
   // Updated to use the enhanced getDashboardStats
   async getByUser(req, res) {
     if (!req.user || !req.user.id) return res.status(401).json({ success: false, message: "Unauthorized" });

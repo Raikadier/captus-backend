@@ -8,9 +8,8 @@ const subTaskController = new SubTaskController();
 const supabaseAdmin = getSupabaseClient();
 const verifySupabaseToken = buildSupabaseAuthMiddleware(supabaseAdmin);
 
-// Aplicar middleware de autenticación y usuario a todas las rutas
+// Aplicar middleware de autenticación a todas las rutas
 router.use(verifySupabaseToken);
-router.use(subTaskController.injectUser);
 
 // Rutas de subtareas
 router.get("/", subTaskController.getAll.bind(subTaskController));

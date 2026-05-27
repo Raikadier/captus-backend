@@ -10,7 +10,6 @@ class UserService {
     this.userRepository = userRepo || new UserRepository();
     this.categoryService = categorySvc || new CategoryService();
     this.statisticsService = statisticsSvc || new StatisticsService();
-    this.currentUser = null;
   }
 
   // Get user by ID
@@ -48,23 +47,18 @@ class UserService {
 
       // Initialize features for the user
       try {
-        this.setCurrentUser(syncedUser);
-
         // 1. Initialize Statistics
         try {
           if (this.statisticsService.checkStreak) {
-            await this.statisticsService.checkStreak();
+            await this.statisticsService.checkStreak(syncedUser.id);
           }
         } catch (statsError) {
           console.warn("Error initializing statistics:", statsError.message);
         }
 
         // 2. Create "General" category if it doesn't exist
-        const generalCategory = {
-          name: "General",
-          id_User: syncedUser.id
-        };
-        await this.categoryService.save(generalCategory);
+        const generalCategory = { name: "General" };
+        await this.categoryService.save(generalCategory, syncedUser.id);
         console.log(`Category "General" initialized for user: ${syncedUser.email}`);
       } catch (initError) {
         console.warn("Note: Could not initialize default category (might already exist):", initError.message);
@@ -118,8 +112,7 @@ class UserService {
     try {
       // 1. Cleanup Statistics
       try {
-        this.statisticsService.setCurrentUser({ id: userId });
-        const stats = await this.statisticsService.getByCurrentUser();
+        const stats = await this.statisticsService.getByCurrentUser(userId);
         if (stats && stats.id_Statistics) {
           await this.statisticsService.delete(stats.id_Statistics);
         }
@@ -134,8 +127,7 @@ class UserService {
 
       // 3. Cleanup Categories
       try {
-        this.categoryService.setCurrentUser({ id: userId });
-        const categoriesResult = await this.categoryService.getAll();
+        const categoriesResult = await this.categoryService.getAll(userId);
         if (categoriesResult.success && Array.isArray(categoriesResult.data)) {
           for (const category of categoriesResult.data) {
             if (category.id_User === userId) {
@@ -152,7 +144,6 @@ class UserService {
 
         if (TaskServiceClass) {
           const taskSvc = new TaskServiceClass();
-          taskSvc.setCurrentUser({ id: userId });
           await taskSvc.deleteByUser(userId);
         }
       } catch (e) { console.warn("Error cleaning tasks:", e.message); }
@@ -189,11 +180,6 @@ class UserService {
     }
   }
 
-  setCurrentUser(user) {
-    this.currentUser = user;
-    if (this.statisticsService) this.statisticsService.setCurrentUser(user);
-    if (this.categoryService) this.categoryService.setCurrentUser(user);
-  }
 }
 
 export default UserService;

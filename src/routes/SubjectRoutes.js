@@ -10,7 +10,6 @@ const supabaseAdmin = getSupabaseClient();
 const verifySupabaseToken = buildSupabaseAuthMiddleware(supabaseAdmin);
 
 router.use(verifySupabaseToken);
-router.use(subjectController.injectUser);
 
 router.get("/", subjectController.getAll.bind(subjectController));
 // Restringir creación de materias a profesores

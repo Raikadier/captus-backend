@@ -2,88 +2,58 @@ import ProjectRepository from "../repositories/ProjectRepository.js";
 import ProjectMemberRepository from "../repositories/ProjectMemberRepository.js";
 import { OperationResult } from "../shared/OperationResult.js";
 
-const projectRepository = new ProjectRepository();
+const projectRepository       = new ProjectRepository();
 const projectMemberRepository = new ProjectMemberRepository();
 
 export class ProjectService {
-  constructor() {
-    this.currentUser = null;
+  async isProjectMember(projectId, userId) {
+    if (!userId || !projectId) return false;
+    return await projectMemberRepository.isMember(projectId, userId);
   }
 
-  setCurrentUser(user) {
-    this.currentUser = user;
-  }
-
-  // Verificar si usuario es miembro de un proyecto
-  async isProjectMember(projectId, userId = null) {
-    const userToCheck = userId || this.currentUser?.id;
-    if (!userToCheck || !projectId) return false;
-
-    return await projectMemberRepository.isMember(projectId, userToCheck);
-  }
-
-  // Verificar si usuario es admin de un proyecto
-  async isProjectAdmin(projectId, userId = null) {
-    const userToCheck = userId || this.currentUser?.id;
-    if (!userToCheck || !projectId) return false;
-
-    const role = await projectMemberRepository.getUserRole(projectId, userToCheck);
+  async isProjectAdmin(projectId, userId) {
+    if (!userId || !projectId) return false;
+    const role = await projectMemberRepository.getUserRole(projectId, userId);
     return role && (role.name === "Administrador" || role.name === "Admin");
   }
 
-  // Obtener proyectos donde el usuario es miembro
-  async getMyProjects() {
+  async getMyProjects(userId) {
     try {
-      if (!this.currentUser) {
-        return new OperationResult(false, "Usuario no autenticado.");
-      }
-
-      const projects = await projectRepository.getByCreator(this.currentUser.id);
+      if (!userId) return new OperationResult(false, "Usuario no autenticado.");
+      const projects = await projectRepository.getByCreator(userId);
       return new OperationResult(true, "Proyectos obtenidos exitosamente.", projects);
     } catch (error) {
       return new OperationResult(false, `Error al obtener proyectos: ${error.message}`);
     }
   }
 
-  // Obtener proyectos donde el usuario es miembro (como miembro)
-  async getProjectsAsMember() {
+  async getProjectsAsMember(userId) {
     try {
-      if (!this.currentUser) {
-        return new OperationResult(false, "Usuario no autenticado.");
-      }
-
-      const memberships = await projectMemberRepository.getByUser(this.currentUser.id);
-      const projects = memberships.map(membership => membership.Project).filter(Boolean);
+      if (!userId) return new OperationResult(false, "Usuario no autenticado.");
+      const memberships = await projectMemberRepository.getByUser(userId);
+      const projects = memberships.map(m => m.Project).filter(Boolean);
       return new OperationResult(true, "Proyectos obtenidos exitosamente.", projects);
     } catch (error) {
       return new OperationResult(false, `Error al obtener proyectos: ${error.message}`);
     }
   }
 
-  // Obtener todos los proyectos del usuario (creados + miembro)
-  async getAllUserProjects() {
+  async getAllUserProjects(userId) {
     try {
-      if (!this.currentUser) {
-        return new OperationResult(false, "Usuario no autenticado.");
-      }
+      if (!userId) return new OperationResult(false, "Usuario no autenticado.");
 
-      const [createdProjects, memberProjects] = await Promise.all([
-        this.getMyProjects(),
-        this.getProjectsAsMember()
+      const [createdResult, memberResult] = await Promise.all([
+        this.getMyProjects(userId),
+        this.getProjectsAsMember(userId),
       ]);
 
-      if (!createdProjects.success || !memberProjects.success) {
+      if (!createdResult.success || !memberResult.success)
         return new OperationResult(false, "Error al obtener proyectos.");
-      }
 
-      // Combinar y eliminar duplicados
-      const allProjects = [...createdProjects.data];
-      const createdIds = new Set(createdProjects.data.map(p => p.id_Project));
-
-      memberProjects.data.forEach(project => {
-        if (!createdIds.has(project.id_Project)) {
-          allProjects.push(project);
-        }
+      const allProjects = [...createdResult.data];
+      const createdIds  = new Set(createdResult.data.map(p => p.id_Project));
+      memberResult.data.forEach(p => {
+        if (!createdIds.has(p.id_Project)) allProjects.push(p);
       });
 
       return new OperationResult(true, "Proyectos obtenidos exitosamente.", allProjects);
@@ -92,23 +62,15 @@ export class ProjectService {
     }
   }
 
-  // Obtener proyecto por ID (con verificación de membresía)
-  async getById(id) {
+  async getById(id, userId) {
     try {
-      if (!id || id <= 0) {
-        return new OperationResult(false, "ID de proyecto inválido.");
-      }
+      if (!id || id <= 0) return new OperationResult(false, "ID de proyecto inválido.");
 
       const project = await projectRepository.getById(id);
-      if (!project) {
-        return new OperationResult(false, "Proyecto no encontrado.");
-      }
+      if (!project)   return new OperationResult(false, "Proyecto no encontrado.");
 
-      // Verificar si el usuario es miembro
-      const isMember = await this.isProjectMember(id);
-      if (!isMember) {
-        return new OperationResult(false, "No tienes acceso a este proyecto.");
-      }
+      const isMember = await this.isProjectMember(id, userId);
+      if (!isMember)  return new OperationResult(false, "No tienes acceso a este proyecto.");
 
       return new OperationResult(true, "Proyecto encontrado.", project);
     } catch (error) {
@@ -116,94 +78,65 @@ export class ProjectService {
     }
   }
 
-  // Crear nuevo proyecto
-  async create(projectData) {
+  async create(projectData, userId) {
     try {
-      if (!this.currentUser) {
-        return new OperationResult(false, "Usuario no autenticado.");
-      }
-
-      if (!projectData.name || projectData.name.trim() === "") {
+      if (!userId) return new OperationResult(false, "Usuario no autenticado.");
+      if (!projectData.name || projectData.name.trim() === "")
         return new OperationResult(false, "El nombre del proyecto es requerido.");
-      }
 
-      // Verificar nombre único
-      const existingProject = await projectRepository.getByName(projectData.name);
-      if (existingProject) {
+      const existing = await projectRepository.getByName(projectData.name);
+      if (existing)
         return new OperationResult(false, "Ya existe un proyecto con ese nombre.");
-      }
 
       const project = await projectRepository.save({
-        name: projectData.name,
+        name:        projectData.name,
         description: projectData.description || "",
-        id_Creator: this.currentUser.id
+        id_Creator:  userId,
       });
 
-      if (project) {
-        return new OperationResult(true, "Proyecto creado exitosamente.", project);
-      } else {
-        return new OperationResult(false, "Error al crear el proyecto.");
-      }
+      return project
+        ? new OperationResult(true, "Proyecto creado exitosamente.", project)
+        : new OperationResult(false, "Error al crear el proyecto.");
     } catch (error) {
       return new OperationResult(false, `Error al crear proyecto: ${error.message}`);
     }
   }
 
-  // Actualizar proyecto (solo creadores)
-  async update(id, projectData) {
+  async update(id, projectData, userId) {
     try {
-      if (!id || id <= 0) {
-        return new OperationResult(false, "ID de proyecto inválido.");
-      }
+      if (!id || id <= 0) return new OperationResult(false, "ID de proyecto inválido.");
 
-      // Verificar permisos
-      const isAdmin = await this.isProjectAdmin(id);
-      if (!isAdmin) {
-        return new OperationResult(false, "No tienes permisos para editar este proyecto.");
-      }
+      const isAdmin = await this.isProjectAdmin(id, userId);
+      if (!isAdmin)  return new OperationResult(false, "No tienes permisos para editar este proyecto.");
 
-      if (!projectData.name || projectData.name.trim() === "") {
+      if (!projectData.name || projectData.name.trim() === "")
         return new OperationResult(false, "El nombre del proyecto es requerido.");
-      }
 
       const updated = await projectRepository.update({
-        id_Project: id,
-        name: projectData.name,
-        description: projectData.description || ""
+        id_Project:  id,
+        name:        projectData.name,
+        description: projectData.description || "",
       });
 
-      if (updated) {
-        return new OperationResult(true, "Proyecto actualizado exitosamente.");
-      } else {
-        return new OperationResult(false, "Error al actualizar el proyecto.");
-      }
+      return updated
+        ? new OperationResult(true, "Proyecto actualizado exitosamente.")
+        : new OperationResult(false, "Error al actualizar el proyecto.");
     } catch (error) {
       return new OperationResult(false, `Error al actualizar proyecto: ${error.message}`);
     }
   }
 
-  // Eliminar proyecto (solo creadores)
-  async delete(id) {
+  async delete(id, userId) {
     try {
-      if (!id || id <= 0) {
-        return new OperationResult(false, "ID de proyecto inválido.");
-      }
+      if (!id || id <= 0) return new OperationResult(false, "ID de proyecto inválido.");
 
-      // Verificar permisos
-      const isAdmin = await this.isProjectAdmin(id);
-      if (!isAdmin) {
-        return new OperationResult(false, "No tienes permisos para eliminar este proyecto.");
-      }
-
-      // NOTA: Las tareas del proyecto se convierten en personales de sus creadores
-      // Esto se maneja en el frontend o en un servicio separado
+      const isAdmin = await this.isProjectAdmin(id, userId);
+      if (!isAdmin)  return new OperationResult(false, "No tienes permisos para eliminar este proyecto.");
 
       const deleted = await projectRepository.delete(id);
-      if (deleted) {
-        return new OperationResult(true, "Proyecto eliminado exitosamente.");
-      } else {
-        return new OperationResult(false, "Error al eliminar el proyecto.");
-      }
+      return deleted
+        ? new OperationResult(true, "Proyecto eliminado exitosamente.")
+        : new OperationResult(false, "Error al eliminar el proyecto.");
     } catch (error) {
       return new OperationResult(false, `Error al eliminar proyecto: ${error.message}`);
     }

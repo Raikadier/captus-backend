@@ -1,45 +1,38 @@
 // src/controllers/UserAchievementsController.js
 import { UserAchievementsService } from "../services/UserAchievementsService.js";
-
-const userAchievementsService = new UserAchievementsService();
+import { AchievementValidatorService } from "../services/AchievementValidatorService.js";
 
 export class UserAchievementsController {
   constructor() {
-    // Middleware para inyectar usuario en el servicio
-    this.injectUser = (req, res, next) => {
-      if (req.user) {
-        userAchievementsService.setCurrentUser(req.user);
-      }
-      next();
-    };
+    this.userAchievementsService = new UserAchievementsService();
   }
 
   async getMyAchievements(req, res) {
-    const result = await userAchievementsService.getMyAchievements();
+    const result = await this.userAchievementsService.getByUser(req.user.id);
     res.status(result.success ? 200 : 401).json(result);
   }
 
   async getByUser(req, res) {
     const { userId } = req.params;
-    const result = await userAchievementsService.getByUser(parseInt(userId));
+    const result = await this.userAchievementsService.getByUser(parseInt(userId));
     res.status(result.success ? 200 : 404).json(result);
   }
 
   async getStats(req, res) {
-    const result = await userAchievementsService.getAchievementStats(req.user.id);
+    const result = await this.userAchievementsService.getAchievementStats(req.user.id);
     res.status(result.success ? 200 : 500).json(result);
   }
 
   async hasAchievement(req, res) {
     const { achievementId } = req.params;
-    const result = await userAchievementsService.hasAchievement(req.user.id, achievementId);
+    const result = await this.userAchievementsService.hasAchievement(req.user.id, achievementId);
     res.status(result.success ? 200 : 400).json(result);
   }
 
   async unlockAchievement(req, res) {
     const { achievementId } = req.params;
     const { progress } = req.body;
-    const result = await userAchievementsService.unlockAchievement(req.user.id, achievementId, progress || 0);
+    const result = await this.userAchievementsService.unlockAchievement(req.user.id, achievementId, progress || 0);
     res.status(result.success ? 201 : 400).json(result);
   }
 
@@ -54,21 +47,18 @@ export class UserAchievementsController {
       });
     }
 
-    const result = await userAchievementsService.updateProgress(req.user.id, achievementId, progress);
+    const result = await this.userAchievementsService.updateProgress(req.user.id, achievementId, progress);
     res.status(result.success ? 200 : 400).json(result);
   }
 
   async resetAchievements(req, res) {
-    const result = await userAchievementsService.resetUserAchievements(req.user.id);
+    const result = await this.userAchievementsService.resetUserAchievements(req.user.id);
     res.status(result.success ? 200 : 400).json(result);
   }
 
   async recalculateAll(req, res) {
     try {
-      const { AchievementValidatorService } = await import("../services/AchievementValidatorService.js");
       const validator = new AchievementValidatorService();
-      validator.setCurrentUser(req.user);
-
       const updatedCount = await validator.recalculateAllAchievements(req.user.id);
 
       res.status(200).json({

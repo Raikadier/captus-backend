@@ -4,15 +4,6 @@ import { OperationResult } from "../shared/OperationResult.js";
 const userAchievementsRepository = new UserAchievementsRepository();
 
 export class UserAchievementsService {
-  constructor() {
-    this.currentUser = null;
-  }
-
-  // Método para establecer el usuario actual (desde middleware de auth)
-  setCurrentUser(user) {
-    this.currentUser = user;
-  }
-
   async getByUser(userId) {
     try {
       if (!userId) {
@@ -20,23 +11,9 @@ export class UserAchievementsService {
       }
 
       const achievements = await userAchievementsRepository.getByUser(userId);
-      console.log(`🎯 User ${userId} achievements from DB:`, achievements);
-      console.log(`📊 Found ${achievements.length} achievements for user ${userId}`);
       return new OperationResult(true, "Logros obtenidos exitosamente.", achievements);
     } catch (error) {
       console.error(`❌ Error getting achievements for user ${userId}:`, error);
-      return new OperationResult(false, `Error al obtener logros: ${error.message}`);
-    }
-  }
-
-  async getMyAchievements() {
-    try {
-      if (!this.currentUser) {
-        return new OperationResult(false, "Usuario no autenticado.");
-      }
-
-      return await this.getByUser(this.currentUser.id);
-    } catch (error) {
       return new OperationResult(false, `Error al obtener logros: ${error.message}`);
     }
   }

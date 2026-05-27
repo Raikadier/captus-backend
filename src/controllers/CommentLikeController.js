@@ -1,56 +1,48 @@
 import { CommentLikeService } from "../services/CommentLikeService.js";
 
-const commentLikeService = new CommentLikeService();
-
 export class CommentLikeController {
   constructor() {
-    // Middleware para inyectar usuario en el servicio
-    this.injectUser = (req, res, next) => {
-      if (req.user) {
-        commentLikeService.setCurrentUser(req.user);
-      }
-      next();
-    };
+    this.commentLikeService = new CommentLikeService();
   }
 
   async getByComment(req, res) {
     const { commentId } = req.params;
-    const result = await commentLikeService.getByComment(parseInt(commentId));
+    const result = await this.commentLikeService.getByComment(parseInt(commentId), req.user.id);
     res.status(result.success ? 200 : 403).json(result);
   }
 
   async toggleLike(req, res) {
     const { commentId } = req.params;
-    const result = await commentLikeService.toggleLike(parseInt(commentId));
+    const result = await this.commentLikeService.toggleLike(parseInt(commentId), req.user.id);
     res.status(result.success ? 200 : 400).json(result);
   }
 
   async hasUserLiked(req, res) {
     const { commentId } = req.params;
-    const result = await commentLikeService.hasUserLiked(parseInt(commentId));
+    const result = await this.commentLikeService.hasUserLiked(parseInt(commentId), req.user.id);
     res.status(result.success ? 200 : 403).json(result);
   }
 
   async countLikes(req, res) {
     const { commentId } = req.params;
-    const result = await commentLikeService.countLikes(parseInt(commentId));
+    const result = await this.commentLikeService.countLikes(parseInt(commentId), req.user.id);
     res.status(result.success ? 200 : 403).json(result);
   }
 
   async getUserLikes(req, res) {
-    const result = await commentLikeService.getUserLikes();
+    const result = await this.commentLikeService.getUserLikes(req.user.id);
     res.status(result.success ? 200 : 401).json(result);
   }
 
   async likeComment(req, res) {
     const { commentId } = req.params;
-    const result = await commentLikeService.likeComment(parseInt(commentId));
+    const result = await this.commentLikeService.likeComment(parseInt(commentId), req.user.id);
     res.status(result.success ? 201 : 400).json(result);
   }
 
   async unlikeComment(req, res) {
     const { commentId } = req.params;
-    const result = await commentLikeService.unlikeComment(parseInt(commentId));
+    const result = await this.commentLikeService.unlikeComment(parseInt(commentId), req.user.id);
     res.status(result.success ? 200 : 400).json(result);
   }
 }

@@ -25,14 +25,6 @@ export class TaskController {
     );
     this.achievementValidator = new AchievementValidatorService();
 
-    // Middleware para inyectar usuario en el servicio
-    this.injectUser = (req, res, next) => {
-      if (req.user) {
-        this.taskService.setCurrentUser(req.user);
-        this.achievementValidator.setCurrentUser(req.user);
-      }
-      next();
-    };
   }
 
   async getAll(req, res) {

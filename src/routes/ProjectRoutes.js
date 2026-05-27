@@ -8,9 +8,8 @@ const projectController = new ProjectController();
 const supabaseAdmin = getSupabaseClient();
 const verifySupabaseToken = buildSupabaseAuthMiddleware(supabaseAdmin);
 
-// Aplicar middleware de autenticación y usuario a todas las rutas
+// Aplicar middleware de autenticación a todas las rutas
 router.use(verifySupabaseToken);
-router.use(projectController.injectUser);
 
 // Rutas de proyectos
 router.get("/", projectController.getAll.bind(projectController));

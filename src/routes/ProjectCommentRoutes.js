@@ -8,9 +8,8 @@ const projectCommentController = new ProjectCommentController();
 const supabaseAdmin = getSupabaseClient();
 const verifySupabaseToken = buildSupabaseAuthMiddleware(supabaseAdmin);
 
-// Aplicar middleware de autenticación y usuario a todas las rutas
+// Aplicar middleware de autenticación a todas las rutas
 router.use(verifySupabaseToken);
-router.use(projectCommentController.injectUser);
 
 // Rutas de comentarios de proyecto
 router.get("/project/:projectId", projectCommentController.getByProject.bind(projectCommentController));

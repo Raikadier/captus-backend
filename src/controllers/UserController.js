@@ -14,15 +14,6 @@ export class UserController {
     this.userService = new UserService(supabaseAdmin, userRepo, categorySvc, statisticsSvc);
   }
 
-  // Middleware to verify user presence if needed for other controllers
-  injectUser = (req, res, next) => {
-    if (req.user) {
-      // We could set it on the service, but the service is a singleton instance here
-      // so better to pass it as argument if needed.
-    }
-    next();
-  };
-
   // NEW: Sync user data from Auth to public.users
   async syncUser(req, res) {
     try {

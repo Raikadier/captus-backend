@@ -8,9 +8,8 @@ const categoryController = new CategoryController();
 const supabaseAdmin = getSupabaseClient();
 const verifySupabaseToken = buildSupabaseAuthMiddleware(supabaseAdmin);
 
-// Aplicar middleware de autenticación y usuario a todas las rutas
+// Aplicar middleware de autenticación a todas las rutas
 router.use(verifySupabaseToken);
-router.use(categoryController.injectUser);
 
 // Rutas de categorías
 router.get("/", categoryController.getAll.bind(categoryController));

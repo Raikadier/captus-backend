@@ -1,25 +1,18 @@
 import { DiagramService } from "../services/DiagramService.js";
-
-const diagramService = new DiagramService();
 import NotificationService from '../services/NotificationService.js';
 
 export class DiagramController {
   constructor() {
-    this.injectUser = (req, res, next) => {
-      if (req.user) {
-        diagramService.setCurrentUser(req.user);
-      }
-      next();
-    };
+    this.diagramService = new DiagramService();
   }
 
   async getAll(req, res) {
-    const result = await diagramService.getAllByUser();
+    const result = await this.diagramService.getAllByUser(req.user.id);
     res.status(result.success ? 200 : 400).json(result);
   }
 
   async create(req, res) {
-    const result = await diagramService.create(req.body);
+    const result = await this.diagramService.create(req.body, req.user.id);
 
     if (result.success) {
       await NotificationService.notify({
@@ -28,7 +21,7 @@ export class DiagramController {
         body: `Has creado el diagrama "${result.data.title || 'Sin título'}".`,
         event_type: 'diagram_created',
         entity_id: result.data.id,
-        is_auto: true
+        is_auto: true,
       });
     }
 
@@ -37,13 +30,13 @@ export class DiagramController {
 
   async update(req, res) {
     const { id } = req.params;
-    const result = await diagramService.update(id, req.body);
+    const result = await this.diagramService.update(id, req.body, req.user.id);
     res.status(result.success ? 200 : 400).json(result);
   }
 
   async delete(req, res) {
     const { id } = req.params;
-    const result = await diagramService.delete(id);
+    const result = await this.diagramService.delete(id, req.user.id);
     res.status(result.success ? 200 : 400).json(result);
   }
 }

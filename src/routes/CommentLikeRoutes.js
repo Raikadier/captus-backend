@@ -8,9 +8,8 @@ const commentLikeController = new CommentLikeController();
 const supabaseAdmin = getSupabaseClient();
 const verifySupabaseToken = buildSupabaseAuthMiddleware(supabaseAdmin);
 
-// Aplicar middleware de autenticación y usuario a todas las rutas
+// Aplicar middleware de autenticación a todas las rutas
 router.use(verifySupabaseToken);
-router.use(commentLikeController.injectUser);
 
 // Rutas de likes de comentarios
 router.get("/comment/:commentId", commentLikeController.getByComment.bind(commentLikeController));
