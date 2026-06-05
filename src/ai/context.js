@@ -126,6 +126,27 @@ export const fetchContextForIntent = async (intent, userId, userRole = "student"
         );
       }
 
+      case "stats": {
+        const { StatisticsService } = await import("../services/StatisticsService.js");
+        const statsService = new StatisticsService();
+        try {
+          const result = await statsService.getByCurrentUser(userId);
+          const stats = result?.data || result;
+          if (!stats) return "No hay estadísticas disponibles aún.";
+          return (
+            "ESTADÍSTICAS DEL ESTUDIANTE:\n" +
+            `- Racha actual: ${stats.current_streak || 0} días\n` +
+            `- Racha máxima: ${stats.max_streak || 0} días\n` +
+            `- Tareas completadas: ${stats.tasks_completed || 0}\n` +
+            `- Tareas creadas: ${stats.tasks_created || 0}\n` +
+            `- Tasa de éxito: ${stats.success_rate ? Math.round(stats.success_rate * 100) + "%" : "N/A"}\n` +
+            `- Días productivos esta semana: ${stats.weekly_completions?.filter(n => n > 0).length || 0}/7`
+          );
+        } catch {
+          return "No se pudieron cargar las estadísticas.";
+        }
+      }
+
       case "notifications":
         // Tools not yet implemented; falls back to general conversation.
         return null;

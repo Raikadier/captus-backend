@@ -1300,6 +1300,34 @@ export const toolRegistry = {
       }
     },
   },
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // STUDENT — Statistics
+  // ════════════════════════════════════════════════════════════════════════════
+
+  get_student_stats: {
+    description: "Obtiene las estadísticas del estudiante: racha, tareas completadas, tasa de éxito y progreso semanal.",
+    parameters: {},
+    execute: async (_, { userId }) => {
+      const { StatisticsService } = await import("../services/StatisticsService.js");
+      const service = new StatisticsService();
+      const result = await service.getByCurrentUser(userId);
+      const stats = result?.data || result;
+      return wrapResult("get_student_stats", { stats });
+    },
+    handler: async (_args, userId) => {
+      const { StatisticsService } = await import("../services/StatisticsService.js");
+      const service = new StatisticsService();
+      try {
+        const result = await service.getByCurrentUser(userId);
+        const stats = result?.data || result;
+        if (!stats) return new OperationResult(false, "No hay estadísticas disponibles aún.");
+        return wrapResult("get_student_stats", { stats });
+      } catch (e) {
+        return new OperationResult(false, `Error al obtener estadísticas: ${e.message}`);
+      }
+    },
+  },
 };
 
 export const toolDefinitions = Object.entries(toolRegistry).map(([name, tool]) => ({
