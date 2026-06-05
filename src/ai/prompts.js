@@ -8,6 +8,8 @@
  *    notes       → create / list / edit notes
  *    events      → create / list / edit calendar events
  *    study       → study a document: flashcards, quiz, summary, concepts
+ *    courses     → list enrolled courses, course activities, materials, teacher
+ *    assignments → pending assignments, submissions, due dates
  *    general     → conversation, tutoring, anything else
  *
  *  Teacher intents:
@@ -23,6 +25,9 @@ const INTENT_CONTEXT = {
   notes:             "[CTX_NOTAS]",
   events:            "[CTX_EVENTOS]",
   study:             "[CTX_ESTUDIO]",
+  courses:           "[CTX_CURSOS]",
+  assignments:       "[CTX_ENTREGAS]",
+  stats:             "[CTX_ESTADISTICAS]",
   teacher_analytics: "[CTX_ANALITICA_DOCENTE]",
   teacher_content:   "[CTX_CONTENIDO_DOCENTE]",
   notifications:     "[CTX_NOTIFICACIONES]",
@@ -46,6 +51,11 @@ INTENTS VÁLIDOS Y CUÁNDO USARLOS:
 - notes: crear/listar/editar notas o apuntes
 - events: crear/listar/editar eventos o calendario
 - study: estudiar un documento, crear flashcards, quiz, resumen, mapa conceptual
+- courses: consultar materias/cursos en los que está inscrito el estudiante,
+  actividades de un curso, materiales, docente del curso
+- assignments: consultar entregas pendientes, ver asignaciones de un curso, estado de una entrega
+- stats: consultar estadísticas personales del estudiante — racha, tareas completadas,
+  porcentaje de éxito, progreso semanal, logros
 - teacher_analytics: el docente consulta estadísticas, calificaciones, alumnos en
   riesgo, tasa de entregas, promedio del grupo, rendimiento por actividad
 - teacher_content: el docente quiere crear actividades, proyectos, rúbricas,

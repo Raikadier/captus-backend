@@ -84,6 +84,48 @@ export const fetchContextForIntent = async (intent, userId, userRole = "student"
         );
       }
 
+      case "courses": {
+        const courses = await courseService.getCoursesForUser(userId, userRole);
+        const list = Array.isArray(courses) ? courses : courses?.data ?? [];
+        if (!list.length) return "El estudiante no tiene cursos activos.";
+        return (
+          "CURSOS DEL ESTUDIANTE:\n" +
+          list
+            .map((c) =>
+              `- [${c.id}] ${c.name || c.title} | Código: ${c.code || c.invite_code || "N/A"} | Docente: ${c.professor || c.teacherName || "N/A"} | Progreso: ${Math.round((c.progress || 0) * 100)}%`
+            )
+            .join("\n")
+        );
+      }
+
+      case "assignments": {
+        // Get student courses first, then pending assignments
+        const courses = await courseService.getCoursesForUser(userId, userRole);
+        const courseList = Array.isArray(courses) ? courses : courses?.data ?? [];
+        if (!courseList.length) return "No tienes cursos activos, no hay asignaciones.";
+
+        const AssignmentService = (await import("../services/AssignmentService.js")).default;
+        const assignmentService = new AssignmentService();
+
+        const allAssignments = [];
+        for (const course of courseList.slice(0, 5)) {
+          try {
+            const result = await assignmentService.getAssignmentsByCourse(course.id, userId, userRole);
+            const list = Array.isArray(result) ? result : result?.data ?? [];
+            allAssignments.push(...list.map(a => ({ ...a, courseName: course.name || course.title })));
+          } catch { /* skip */ }
+        }
+
+        if (!allAssignments.length) return "No tienes asignaciones pendientes.";
+
+        return (
+          "ASIGNACIONES/ENTREGAS:\n" +
+          allAssignments.slice(0, 10).map(a =>
+            `- [${a.id}] ${a.title} | Curso: ${a.courseName} | Vence: ${a.due_date ? new Date(a.due_date).toLocaleDateString("es-ES") : "sin fecha"}`
+          ).join("\n")
+        );
+      }
+
       case "notifications":
         // Tools not yet implemented; falls back to general conversation.
         return null;

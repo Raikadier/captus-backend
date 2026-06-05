@@ -308,6 +308,45 @@ export const toolRegistry = {
   },
 
   // ════════════════════════════════════════════════════════════════════════════
+  // STUDENT — Courses tools
+  // ════════════════════════════════════════════════════════════════════════════
+
+  list_courses: {
+    description: "Lista los cursos/materias en los que está inscrito el estudiante. Devuelve id, nombre, código y docente.",
+    parameters: { type: "object", properties: {} },
+    handler: async (_args, userId) => {
+      try {
+        const courses = await courseService.getCoursesForUser(userId, "student");
+        const list = Array.isArray(courses) ? courses : courses?.data ?? [];
+        if (!list.length) {
+          return new OperationResult(true, "No tienes cursos activos.", { courses: [] });
+        }
+        const mapped = list.map((c) => ({
+          id: c.id,
+          name: c.name || c.title,
+          code: c.code || c.invite_code,
+          teacher: c.professor || c.teacherName,
+          progress: Math.round((c.progress || 0) * 100),
+        }));
+        const lines = mapped.map(
+          (c) =>
+            `• [ID:${c.id}] ${c.name}` +
+            (c.code ? ` | código: ${c.code}` : "") +
+            (c.teacher ? ` | docente: ${c.teacher}` : "") +
+            ` | progreso: ${c.progress}%`
+        );
+        return new OperationResult(
+          true,
+          `📚 Tus cursos (${mapped.length}):\n${lines.join("\n")}`,
+          { courses: mapped }
+        );
+      } catch (e) {
+        return new OperationResult(false, `Error al obtener cursos: ${e.message}`);
+      }
+    },
+  },
+
+  // ════════════════════════════════════════════════════════════════════════════
   // STUDENT — Study tools (Phase 2)
   // ════════════════════════════════════════════════════════════════════════════
 
@@ -1202,6 +1241,65 @@ export const toolRegistry = {
       }
     },
   },
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // STUDENT — Assignments & submissions
+  // ════════════════════════════════════════════════════════════════════════════
+
+  list_assignments: {
+    description: "Lista las asignaciones/entregas pendientes del estudiante en todos sus cursos. Incluye fecha de vencimiento.",
+    parameters: {
+      type: "object",
+      properties: {
+        course_id: {
+          type: "string",
+          description: "ID del curso (opcional). Si se omite, lista de todos los cursos.",
+        },
+      },
+    },
+    handler: async (args, userId, userRole = "student") => {
+      try {
+        const AssignmentService = (await import("../services/AssignmentService.js")).default;
+        const service = new AssignmentService();
+
+        if (args?.course_id) {
+          const result = await service.getAssignmentsByCourse(args.course_id, userId, userRole);
+          const list = Array.isArray(result) ? result : result?.data ?? [];
+          return wrapResult("list_assignments", new OperationResult(true, `${list.length} asignación(es) encontrada(s).`, { assignments: list }));
+        }
+
+        // All courses
+        const courses = await courseService.getCoursesForUser(userId, userRole);
+        const courseList = Array.isArray(courses) ? courses : courses?.data ?? [];
+        if (!courseList.length) {
+          return new OperationResult(true, "No tienes cursos activos.", { assignments: [] });
+        }
+
+        const all = [];
+        for (const c of courseList.slice(0, 5)) {
+          try {
+            const res = await service.getAssignmentsByCourse(c.id, userId, userRole);
+            const items = Array.isArray(res) ? res : res?.data ?? [];
+            all.push(...items.map(a => ({ ...a, course_name: c.name || c.title })));
+          } catch { /* skip */ }
+        }
+
+        if (!all.length) {
+          return new OperationResult(true, "No tienes asignaciones pendientes.", { assignments: [] });
+        }
+
+        const message =
+          `📋 Asignaciones (${all.length}):\n` +
+          all.slice(0, 10).map(a =>
+            `• [${a.id}] ${a.title} | Curso: ${a.course_name} | Vence: ${a.due_date ? new Date(a.due_date).toLocaleDateString("es-ES") : "sin fecha"}`
+          ).join("\n");
+
+        return new OperationResult(true, message, { assignments: all });
+      } catch (e) {
+        return new OperationResult(false, `Error al obtener asignaciones: ${e.message}`);
+      }
+    },
+  },
 };
 
 export const toolDefinitions = Object.entries(toolRegistry).map(([name, tool]) => ({
@@ -1232,7 +1330,7 @@ export const executeTool = async ({ name, args, userId, userRole = "student" }) 
   }
 
   try {
-    return await tool.handler(args, userId);
+    return await tool.handler(args, userId, userRole);
   } catch (error) {
     console.error(`[AI/tools] Error ejecutando ${name}`, error);
     return new OperationResult(false, `No pude completar "${name}": ${error.message}`);
