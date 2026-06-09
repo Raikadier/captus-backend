@@ -122,7 +122,7 @@ export class TaskController {
   async getPending(req, res) {
     if (!req.user || !req.user.id) return res.status(401).json({ success: false, message: "Unauthorized" });
     const limit = parseInt(req.query.limit) || 3;
-    const result = await this.taskService.getPendingTasks(limit);
+    const result = await this.taskService.getPendingTasks(limit, req.user);
     res.status(result.success ? 200 : 400).json(result);
   }
 }
