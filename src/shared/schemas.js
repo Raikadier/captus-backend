@@ -4,6 +4,13 @@ import { z } from 'zod';
 
 const isoDate = z.string().datetime({ message: 'Debe ser una fecha ISO 8601 válida.' });
 const optionalIsoDate = isoDate.optional();
+// Accepts a full ISO 8601 datetime ("2026-06-10T00:00:00Z") OR a date-only
+// string ("2026-06-10"). Clients (task form, quick-date buttons) send date-only,
+// which z.string().datetime() rejects — causing a 400 on task create/update.
+const flexibleDate = z
+  .string()
+  .refine((s) => !Number.isNaN(Date.parse(s)), { message: 'Debe ser una fecha válida.' });
+const optionalFlexibleDate = flexibleDate.optional();
 const shortStr  = (label) => z.string({ required_error: `${label} es requerido.` }).min(1, `${label} no puede estar vacío.`).max(255);
 const longStr   = (label) => z.string({ required_error: `${label} es requerido.` }).min(1).max(5000);
 
@@ -42,8 +49,8 @@ const _TaskFields = z.object({
   description: z.string().max(2000).optional(),
   priority:    z.enum(PRIORITIES, { message: `Prioridad debe ser: ${PRIORITIES.join(', ')}.` }).optional(),
   status:      z.enum(STATUSES).optional(),
-  dueDate:     optionalIsoDate,
-  due_date:    optionalIsoDate,
+  dueDate:     optionalFlexibleDate,
+  due_date:    optionalFlexibleDate,
   courseId:    z.string().optional(),
   groupId:     z.string().optional(),
 });
