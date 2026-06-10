@@ -458,15 +458,18 @@ describe('TaskService Integration Tests', () => {
                 expect(result.message).toBe('No tienes acceso a esta tarea.');
             });
 
-            it('should fail when trying to uncomplete a completed task', async () => {
-                const existingTask = { id_Task: 1, id_User: testUserId, title: 'Task', state: true };
+            it('should allow uncompleting a completed task', async () => {
+                const existingTask = { id_Task: 1, id_User: testUserId, title: 'Task', state: true, completed: true };
                 const updateData = { id_Task: 1, state: false };
                 mockTaskRepo.getById.mockResolvedValue(existingTask);
+                mockTaskRepo.update.mockResolvedValue({ ...existingTask, state: false, completed: false });
 
                 const result = await taskService.update(updateData, testUser);
 
-                expect(result.success).toBe(false);
-                expect(result.message).toBe('No se puede desmarcar una tarea completada.');
+                expect(result.success).toBe(true);
+                expect(mockTaskRepo.update).toHaveBeenCalledWith(
+                    expect.objectContaining({ id_Task: 1, title: 'Task', state: false, completed: false })
+                );
             });
 
             it('should mark all subtasks as completed when completing task', async () => {

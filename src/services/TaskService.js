@@ -311,16 +311,25 @@ export class TaskService {
         return new OperationResult(false, "No tienes acceso a esta tarea.");
       }
 
-      if (!task.state && existingTask.state) {
-        return new OperationResult(false, "No se puede desmarcar una tarea completada.");
+      const mergedTask = {
+        ...existingTask,
+        ...task,
+        id: existingTask.id,
+        id_Task: task.id_Task ?? existingTask.id_Task,
+      };
+
+      if (mergedTask.completed !== undefined) {
+        mergedTask.state = mergedTask.completed;
+      } else if (mergedTask.state !== undefined) {
+        mergedTask.completed = mergedTask.state;
       }
 
       // If completing the task, mark all subtasks as completed
-      if (task.state && !existingTask.state) {
-        await this.markAllSubTasksAsCompleted(task.id_Task);
+      if (mergedTask.state && !existingTask.state) {
+        await this.markAllSubTasksAsCompleted(mergedTask.id_Task);
       }
 
-      const updated = await this.taskRepository.update(task);
+      const updated = await this.taskRepository.update(mergedTask);
 
       if (updated) {
         // Load relations for email notification
