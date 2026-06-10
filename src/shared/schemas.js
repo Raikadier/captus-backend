@@ -48,9 +48,15 @@ const _TaskFields = z.object({
   title:       shortStr('El título'),
   description: z.string().max(2000).optional(),
   priority:    z.enum(PRIORITIES, { message: `Prioridad debe ser: ${PRIORITIES.join(', ')}.` }).optional(),
+  // The web client sends priority_id / category_id as integers (FK to priorities/categories
+  // tables). Accept both the numeric FK form and the legacy string form so neither
+  // is stripped by Zod, preventing a NOT NULL constraint violation on INSERT.
+  priority_id: z.number().int().positive().optional(),
+  category_id: z.number().int().positive().optional(),
   status:      z.enum(STATUSES).optional(),
   dueDate:     optionalFlexibleDate,
   due_date:    optionalFlexibleDate,
+  completed:   z.boolean().optional(),
   courseId:    z.string().optional(),
   groupId:     z.string().optional(),
 });
