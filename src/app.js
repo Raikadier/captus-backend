@@ -34,6 +34,7 @@ import NotificationRoutes from './routes/NotificationRoutes.js';
 import TelegramRoutes from './routes/TelegramRoutes.js';
 import telegramController from './controllers/TelegramController.js';
 import aiRouter from './routes/ai.js';
+import { isGeminiConfigured } from './ai/model.js';
 import AdminRoutes from './routes/AdminRoutes.js';
 import SuperAdminRoutes from './routes/SuperAdminRoutes.js';
 import { getSupabaseClient } from './lib/supabaseAdmin.js';
@@ -135,7 +136,11 @@ const verifySupabaseToken = buildSupabaseAuthMiddleware(supabaseAdmin);
 
 // ── Health ────────────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'Captus Web API is running' });
+  res.json({
+    status: 'OK',
+    message: 'Captus Web API is running',
+    ai: { geminiConfigured: isGeminiConfigured() },
+  });
 });
 
 // ── Swagger ───────────────────────────────────────────────────────────────────

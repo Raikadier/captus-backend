@@ -43,6 +43,15 @@ class ConversationRepository extends BaseRepository {
     return mapFromDb(data);
   }
 
+  async touchUpdatedAt(id) {
+    const { error } = await this.client
+      .from(this.tableName)
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', id);
+
+    if (error) throw new Error(error.message);
+  }
+
   async deleteOldConversations(userId) {
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
@@ -81,9 +90,6 @@ class ConversationRepository extends BaseRepository {
   }
 
   async getRecentByUserId(userId) {
-    // Lazy cleanup: delete old conversations before fetching
-    await this.deleteOldConversations(userId);
-
     const { data, error } = await this.client
       .from(this.tableName)
       .select('*')

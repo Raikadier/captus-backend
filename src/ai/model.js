@@ -26,6 +26,15 @@ if (!geminiApiKey) {
   console.warn('[AI/model] GEMINI_API_KEY no está configurada — las llamadas a Gemini fallarán.');
 }
 
+export const isGeminiConfigured = () => Boolean(geminiApiKey);
+
+const missingKeyError = () => {
+  const err = new Error('GEMINI_API_KEY no está configurada en el servidor.');
+  err.status = 503;
+  err.code = 'AI_CONFIG_ERROR';
+  return err;
+};
+
 export const gemini = new OpenAI({
   apiKey: geminiApiKey || "missing-key",
   baseURL: geminiBaseURL,
@@ -111,6 +120,10 @@ const fallbackProviders = () => {
  */
 export const createChatCompletion = async (params, options = {}) => {
   const { provider = "gemini", purpose } = options;
+
+  if (provider === "gemini" && !geminiApiKey) {
+    throw missingKeyError();
+  }
 
   if (provider !== "gemini") {
     return gemini.chat.completions.create(params);

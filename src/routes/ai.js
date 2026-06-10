@@ -1,5 +1,6 @@
 import express from "express";
 import { routerAgent } from "../ai/routerAgent.js";
+import { isGeminiConfigured } from "../ai/model.js";
 import ConversationRepository from "../repositories/ConversationRepository.js";
 import MessageRepository from "../repositories/MessageRepository.js";
 import { validate } from "../middlewares/validate.js";
@@ -14,6 +15,9 @@ const messageRepo = new MessageRepository();
 router.get("/conversations", async (req, res, next) => {
   try {
     const conversations = await conversationRepo.getRecentByUserId(req.user.id);
+    // #region agent log
+    fetch('http://127.0.0.1:7697/ingest/9edb4587-8b39-4b9a-916c-9f808f5e6cc5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'98b83a'},body:JSON.stringify({sessionId:'98b83a',location:'ai.js:GET/conversations',message:'conversations listed',data:{userId:req.user.id,count:conversations.length},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
     return res.json(conversations);
   } catch (err) {
     next(err);
@@ -98,7 +102,40 @@ router.post("/chat", validate(AiChatSchema), async (req, res, next) => {
     }
 
     const userRole = req.user?.role || "student";
-    const responseObj = await routerAgent(message, userId, priorMessages, userRole);
+
+    let responseObj;
+    try {
+      responseObj = await routerAgent(message, userId, priorMessages, userRole);
+    } catch (aiErr) {
+      logger.error("[AI/chat] routerAgent failed", {
+        userId,
+        conversationId,
+        status: aiErr?.status,
+        code: aiErr?.code,
+        message: aiErr?.message,
+      });
+      // #region agent log
+      fetch('http://127.0.0.1:7697/ingest/9edb4587-8b39-4b9a-916c-9f808f5e6cc5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'98b83a'},body:JSON.stringify({sessionId:'98b83a',location:'ai.js:POST/chat:routerAgent',message:'routerAgent failed',data:{status:aiErr?.status,code:aiErr?.code,msg:aiErr?.message,conversationId,geminiConfigured:isGeminiConfigured()},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
+
+      const fallbackText = aiErr?.code === "AI_CONFIG_ERROR"
+        ? "El servicio de IA no está configurado en el servidor. Contacta al administrador."
+        : aiErr?.status === 403
+          ? "No tengo acceso al proveedor de IA (clave inválida o sin permisos). Contacta al administrador."
+          : "Lo siento, no pude procesar tu mensaje en este momento. Intenta de nuevo en unos segundos.";
+
+      await messageRepo.create(conversationId, "bot", fallbackText);
+      await conversationRepo.touchUpdatedAt(conversationId);
+
+      return res.json({
+        result: fallbackText,
+        conversationId,
+        actionPerformed: null,
+        data: null,
+        steps: [],
+        aiError: true,
+      });
+    }
 
     const resultText = typeof responseObj?.result === "string"
       ? responseObj.result
@@ -109,6 +146,7 @@ router.post("/chat", validate(AiChatSchema), async (req, res, next) => {
     const steps           = responseObj?.steps || [];
 
     await messageRepo.create(conversationId, "bot", resultText);
+    await conversationRepo.touchUpdatedAt(conversationId);
 
     logger.info("[AI/chat] response", { userId, length: resultText.length, actionPerformed, steps: steps.length });
 
