@@ -204,4 +204,46 @@ export default class SubmissionService {
     async getPendingReviews(teacherId) {
         return await this.repo.findPendingByTeacher(teacherId);
     }
+
+    async getSubmissionStatus(assignmentId, userId) {
+        const assignment = await this.assignmentRepo.getById(assignmentId);
+        if (!assignment) throw new Error('Tarea no encontrada');
+
+        const isEnrolled = await this.enrollmentRepo.isEnrolled(assignment.course_id, userId);
+        if (!isEnrolled) throw new Error('No autorizado');
+
+        const submission = await this.getSubmissions(assignmentId, userId, 'student');
+        return {
+            assignment,
+            submitted: Boolean(submission),
+            submission: submission || null,
+        };
+    }
+
+    async getPendingAssignmentsForStudent(userId) {
+        const client = requireSupabaseClient();
+        const { data: enrollments, error } = await client
+            .from('course_enrollments')
+            .select('course_id')
+            .eq('student_id', userId);
+
+        if (error) throw new Error(error.message);
+
+        const now = new Date();
+        const pending = [];
+
+        for (const { course_id: courseId } of enrollments || []) {
+            const assignments = await this.assignmentRepo.findByCourse(courseId);
+            for (const assignment of assignments) {
+                if (assignment.due_date && new Date(assignment.due_date) < now) continue;
+
+                const submission = await this.getSubmissions(assignment.id, userId, 'student');
+                if (submission) continue;
+
+                pending.push({ ...assignment, course_id: courseId });
+            }
+        }
+
+        return pending;
+    }
 }

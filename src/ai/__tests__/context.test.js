@@ -14,6 +14,8 @@ const mockGetTasksForAi = jest.fn();
 const mockNotesGetAll = jest.fn();
 const mockEventsGetUpcoming = jest.fn();
 const mockGetCoursesForUser = jest.fn();
+const mockGetPendingAssignments = jest.fn();
+const mockPrioritizeWorkload = jest.fn();
 
 jest.unstable_mockModule("../../services/TaskService.js", () => ({
   TaskService: jest.fn(() => ({ getTasksForAi: mockGetTasksForAi })),
@@ -21,6 +23,14 @@ jest.unstable_mockModule("../../services/TaskService.js", () => ({
 
 jest.unstable_mockModule("../../services/NotesService.js", () => ({
   NotesService: jest.fn(() => ({ getAll: mockNotesGetAll })),
+}));
+
+jest.unstable_mockModule("../../services/SubmissionService.js", () => ({
+  default: jest.fn(() => ({ getPendingAssignmentsForStudent: mockGetPendingAssignments })),
+}));
+
+jest.unstable_mockModule("../../services/AdvisoryService.js", () => ({
+  default: jest.fn(() => ({ prioritizeWorkload: mockPrioritizeWorkload })),
 }));
 
 // EventsService requires EventsRepository injection — mock both
@@ -66,7 +76,7 @@ describe("fetchContextForIntent — tasks", () => {
     expect(result).toContain("[2]");
     expect(result).toContain("Leer capítulo 5");
     expect(mockGetTasksForAi).toHaveBeenCalledWith(
-      { includeCompleted: false, limit: 10 },
+      { includeCompleted: false, excludeOverdue: true, limit: 10 },
       { id: USER_ID }
     );
   });
@@ -150,6 +160,36 @@ describe("fetchContextForIntent — events", () => {
     mockEventsGetUpcoming.mockRejectedValueOnce(new Error("network error"));
     const result = await fetchContextForIntent("events", USER_ID);
     expect(result).toBeNull();
+  });
+});
+
+// ── assignments / advisory intents ────────────────────────────────────────────
+
+describe("fetchContextForIntent — assignments", () => {
+  beforeEach(() => mockGetPendingAssignments.mockReset());
+
+  it("returns pending assignments formatted string", async () => {
+    mockGetPendingAssignments.mockResolvedValueOnce([
+      { id: 5, title: "Taller 1", course_id: 10, due_date: "2026-06-20T00:00:00Z", complexity: 3, estimated_hours: 4 },
+    ]);
+    const result = await fetchContextForIntent("assignments", USER_ID);
+    expect(result).toContain("ENTREGAS PENDIENTES");
+    expect(result).toContain("Taller 1");
+  });
+});
+
+describe("fetchContextForIntent — advisory", () => {
+  beforeEach(() => mockPrioritizeWorkload.mockReset());
+
+  it("returns prioritization message", async () => {
+    mockPrioritizeWorkload.mockResolvedValueOnce({
+      success: true,
+      message: "1. Tarea A",
+      data: { items: [{ title: "Tarea A" }] },
+    });
+    const result = await fetchContextForIntent("advisory", USER_ID);
+    expect(result).toContain("PRIORIZACIÓN RECOMENDADA");
+    expect(result).toContain("Tarea A");
   });
 });
 

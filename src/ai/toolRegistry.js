@@ -3,7 +3,11 @@ import { NotesService } from "../services/NotesService.js";
 import { EventsService } from "../services/EventsService.js";
 import EventsRepository from "../repositories/EventsRepository.js";
 import CourseService from "../services/CourseService.js";
-// SubmissionService reserved for future student-submission tools
+import SubmissionService from "../services/SubmissionService.js";
+import AcademicGroupService from "../services/AcademicGroupService.js";
+import { DiagramService } from "../services/DiagramService.js";
+import AdvisoryService from "../services/AdvisoryService.js";
+import CourseMaterialService from "../services/CourseMaterialService.js";
 import EnrollmentService from "../services/EnrollmentService.js";
 import AssignmentRepository from "../repositories/AssignmentRepository.js";
 import SubmissionRepository from "../repositories/SubmissionRepository.js";
@@ -17,8 +21,11 @@ const notesService    = new NotesService();
 // FIX: EventsService requires repository injection — instantiate with EventsRepository
 const eventsService   = new EventsService(new EventsRepository());
 const courseService   = new CourseService();
-// submissionService reserved for future student-submission tools
-// const submissionService = new SubmissionService();
+const submissionService = new SubmissionService();
+const groupService    = new AcademicGroupService();
+const diagramService  = new DiagramService();
+const advisoryService = new AdvisoryService();
+const courseMaterialService = new CourseMaterialService();
 const enrollmentService = new EnrollmentService();
 const assignmentRepo  = new AssignmentRepository();
 const submissionRepo  = new SubmissionRepository();
@@ -106,6 +113,8 @@ export const toolRegistry = {
         due_date: { type: "string", description: "Fecha límite en ISO 8601", format: "date-time" },
         priority_id: { type: "number", description: "Prioridad (por defecto 1)" },
         category_id: { type: "number", description: "Categoría opcional" },
+        complexity: { type: "number", description: "Complejidad 1-5 (por defecto 3)" },
+        estimated_hours: { type: "number", description: "Horas estimadas de trabajo (por defecto 1)" },
       },
       required: ["title", "due_date"],
     },
@@ -119,6 +128,8 @@ export const toolRegistry = {
         due_date: validation.value.due_date,
         priority_id: validation.value.priority_id ?? 1,
         category_id: validation.value.category_id ?? null,
+        complexity: validation.value.complexity ?? 3,
+        estimated_hours: validation.value.estimated_hours ?? 1,
       };
 
       const result = await taskService.save(payload, { id: userId });
@@ -304,6 +315,92 @@ export const toolRegistry = {
         return new OperationResult(true, message, events);
       }
       return result;
+    },
+  },
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // STUDENT — Diagrams CRUD
+  // ════════════════════════════════════════════════════════════════════════════
+
+  list_diagrams: {
+    description: "Lista los diagramas del usuario (id, título, curso opcional).",
+    parameters: { type: "object", properties: {} },
+    handler: async (_args, userId) => {
+      const result = await diagramService.getAllByUser(userId);
+      if (!result.success) return result;
+      const diagrams = result.data || [];
+      const message = diagrams.length
+        ? diagrams.map((d) => `• [${d.id}] ${d.title}${d.courseId ? ` (curso: ${d.courseId})` : ""}`).join("\n")
+        : "No tienes diagramas.";
+      return new OperationResult(true, message, diagrams);
+    },
+  },
+
+  create_diagram: {
+    description: "Crea un diagrama con título y código (contenido del diagrama).",
+    parameters: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Título del diagrama" },
+        code: { type: "string", description: "Código o contenido del diagrama" },
+        course_id: { type: "number", description: "ID del curso (opcional)" },
+      },
+      required: ["title", "code"],
+    },
+    handler: async (args, userId) => {
+      const validation = validateArgs(toolRegistry.create_diagram.parameters, args);
+      if (!validation.ok) return new OperationResult(false, validation.errors.join("; "));
+      const payload = {
+        title: validation.value.title,
+        code: validation.value.code,
+        courseId: validation.value.course_id ?? null,
+      };
+      return wrapResult("create_diagram", await diagramService.create(payload, userId));
+    },
+  },
+
+  update_diagram: {
+    description: "Actualiza título, código o curso de un diagrama existente.",
+    parameters: {
+      type: "object",
+      properties: {
+        diagram_id: { type: "string", description: "UUID del diagrama" },
+        title: { type: "string" },
+        code: { type: "string" },
+        course_id: { type: "number" },
+      },
+      required: ["diagram_id"],
+    },
+    handler: async (args, userId) => {
+      const { diagram_id, title, code, course_id } = args;
+      if (!diagram_id) return new OperationResult(false, "diagram_id es requerido");
+      const payload = {};
+      if (title !== undefined) payload.title = title;
+      if (code !== undefined) payload.code = code;
+      if (course_id !== undefined) payload.courseId = course_id;
+      return wrapResult(
+        "update_diagram",
+        await diagramService.update(diagram_id, payload, userId)
+      );
+    },
+  },
+
+  delete_diagram: {
+    description: "Elimina un diagrama por ID.",
+    parameters: {
+      type: "object",
+      properties: {
+        diagram_id: { type: "string", description: "UUID del diagrama" },
+      },
+      required: ["diagram_id"],
+    },
+    handler: async (args, userId) => {
+      const validation = validateArgs(toolRegistry.delete_diagram.parameters, args);
+      if (!validation.ok) return new OperationResult(false, validation.errors.join("; "));
+      return wrapResult(
+        "delete_diagram",
+        await diagramService.delete(validation.value.diagram_id, userId)
+      );
     },
   },
 
@@ -974,11 +1071,13 @@ export const toolRegistry = {
         description: { type: "string", description: "Nueva descripción" },
         due_date:    { type: "string", description: "Nueva fecha límite ISO 8601", format: "date-time" },
         priority_id: { type: "number", description: "Nueva prioridad" },
+        complexity: { type: "number", description: "Complejidad 1-5" },
+        estimated_hours: { type: "number", description: "Horas estimadas de trabajo" },
       },
       required: ["task_id"],
     },
     handler: async (args, userId) => {
-      const { task_id, title, description, due_date, priority_id } = args;
+      const { task_id, title, description, due_date, priority_id, complexity, estimated_hours } = args;
       if (!task_id) return new OperationResult(false, "task_id es requerido");
 
       // Bypass TaskService.update (which runs mapToDb and nullifies optional fields).
@@ -1003,6 +1102,8 @@ export const toolRegistry = {
         if (description !== undefined) patch.description = description;
         if (due_date    !== undefined) patch.due_date    = due_date;
         if (priority_id !== undefined) patch.priority_id = Number(priority_id);
+        if (complexity !== undefined) patch.complexity = Number(complexity);
+        if (estimated_hours !== undefined) patch.estimated_hours = Number(estimated_hours);
 
         if (Object.keys(patch).length === 0)
           return new OperationResult(false, "No se indicó ningún campo a actualizar.");
@@ -1302,6 +1403,274 @@ export const toolRegistry = {
   },
 
   // ════════════════════════════════════════════════════════════════════════════
+  // STUDENT — Groups & submissions
+  // ════════════════════════════════════════════════════════════════════════════
+
+  list_my_groups: {
+    description: "Lista los grupos de trabajo del estudiante en sus cursos.",
+    parameters: { type: "object", properties: {} },
+    handler: async (_args, userId) => {
+      try {
+        const groups = await groupService.getMyGroups(userId);
+        if (!groups?.length) {
+          return new OperationResult(true, "No perteneces a ningún grupo de trabajo.", { groups: [] });
+        }
+        const message = groups
+          .map((g) => `• [${g.id}] ${g.name} | Curso: ${g.course_id}${g.description ? ` — ${g.description}` : ""}`)
+          .join("\n");
+        return new OperationResult(true, message, { groups });
+      } catch (e) {
+        return new OperationResult(false, `Error al obtener grupos: ${e.message}`);
+      }
+    },
+  },
+
+  list_course_groups: {
+    description: "Lista los grupos de trabajo de un curso específico.",
+    parameters: {
+      type: "object",
+      properties: {
+        course_id: { type: "number", description: "ID del curso" },
+      },
+      required: ["course_id"],
+    },
+    handler: async (args, userId, userRole = "student") => {
+      try {
+        const groups = await groupService.getGroupsByCourse(Number(args.course_id), userId, userRole);
+        const message = groups?.length
+          ? groups.map((g) => `• [${g.id}] ${g.name} (${g.members?.length ?? 0} miembros)`).join("\n")
+          : "No hay grupos en este curso.";
+        return new OperationResult(true, message, { groups: groups || [] });
+      } catch (e) {
+        return new OperationResult(false, `Error al obtener grupos del curso: ${e.message}`);
+      }
+    },
+  },
+
+  get_submission_status: {
+    description: "Consulta si el estudiante ya entregó una asignación y muestra el estado de la entrega.",
+    parameters: {
+      type: "object",
+      properties: {
+        assignment_id: { type: "number", description: "ID de la asignación" },
+      },
+      required: ["assignment_id"],
+    },
+    handler: async (args, userId) => {
+      try {
+        const status = await submissionService.getSubmissionStatus(Number(args.assignment_id), userId);
+        const { assignment, submitted, submission } = status;
+        const message = submitted
+          ? `✅ Ya entregaste "${assignment.title}"` +
+            (submission?.grade != null ? ` | Nota: ${submission.grade}` : "") +
+            (submission?.feedback ? ` | Retroalimentación: ${submission.feedback}` : "")
+          : `⏳ Pendiente de entrega: "${assignment.title}" | Vence: ${assignment.due_date ? new Date(assignment.due_date).toLocaleDateString("es-ES") : "sin fecha"}`;
+        return new OperationResult(true, message, status);
+      } catch (e) {
+        return new OperationResult(false, `Error al consultar entrega: ${e.message}`);
+      }
+    },
+  },
+
+  list_pending_assignments: {
+    description: "Lista asignaciones de curso pendientes de entregar (excluye vencidas y ya entregadas).",
+    parameters: { type: "object", properties: {} },
+    handler: async (_args, userId) => {
+      try {
+        const pending = await submissionService.getPendingAssignmentsForStudent(userId);
+        const message = pending.length
+          ? pending
+              .map(
+                (a) =>
+                  `• [${a.id}] ${a.title} | Curso: ${a.course_id} | Vence: ${a.due_date ? new Date(a.due_date).toLocaleDateString("es-ES") : "sin fecha"} | Complejidad: ${a.complexity ?? 3}/5 | Tiempo est.: ${a.estimated_hours ?? 2}h`
+              )
+              .join("\n")
+          : "No tienes entregas pendientes.";
+        return new OperationResult(true, message, { assignments: pending });
+      } catch (e) {
+        return new OperationResult(false, `Error al obtener entregas pendientes: ${e.message}`);
+      }
+    },
+  },
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // STUDENT — Advisory prioritization
+  // ════════════════════════════════════════════════════════════════════════════
+
+  prioritize_workload: {
+    description:
+      "Prioriza tareas personales y entregas de curso pendientes según fecha límite, prioridad, complejidad y tiempo estimado. Excluye tareas vencidas.",
+    parameters: {
+      type: "object",
+      properties: {
+        limit: { type: "number", description: "Número máximo de items a devolver (por defecto 10)" },
+      },
+    },
+    handler: async (args, userId) => {
+      const limit = args?.limit ? Number(args.limit) : 10;
+      return wrapResult(
+        "prioritize_workload",
+        await advisoryService.prioritizeWorkload(userId, { limit })
+      );
+    },
+  },
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // STUDENT — Course content retrieval
+  // ════════════════════════════════════════════════════════════════════════════
+
+  list_course_materials: {
+    description: "Lista los materiales/recursos compartidos en un curso.",
+    parameters: {
+      type: "object",
+      properties: {
+        course_id: { type: "number", description: "ID del curso" },
+      },
+      required: ["course_id"],
+    },
+    handler: async (args, userId, userRole = "student") => {
+      const result = await courseMaterialService.getMaterialsByCourse(
+        Number(args.course_id),
+        userId,
+        userRole
+      );
+      if (!result.success) return result;
+      const materials = result.data?.materials || [];
+      const message = materials.length
+        ? materials.map((m) => `• [${m.id}] ${m.title}`).join("\n")
+        : "No hay materiales compartidos en este curso.";
+      return new OperationResult(true, message, { materials });
+    },
+  },
+
+  search_course_content: {
+    description: "Busca materiales compartidos en un curso por palabra clave o tema.",
+    parameters: {
+      type: "object",
+      properties: {
+        course_id: { type: "number", description: "ID del curso (opcional; si se omite busca en todos los cursos inscritos)" },
+        query: { type: "string", description: "Tema o palabras clave a buscar" },
+      },
+      required: ["query"],
+    },
+    handler: async (args, userId, userRole = "student") => {
+      const { query, course_id } = args;
+      if (!query?.trim()) return new OperationResult(false, "query es requerido");
+
+      const result = course_id
+        ? await courseMaterialService.searchCourseContent(Number(course_id), query, userId, userRole)
+        : await courseMaterialService.searchAcrossEnrolledCourses(query, userId);
+
+      if (!result.success) return result;
+      const materials = result.data?.materials || [];
+      const snippets = materials.map((m) => ({
+        id: m.id,
+        courseId: m.courseId,
+        title: m.title,
+        excerpt: (m.content || "").slice(0, 500),
+      }));
+      const message = snippets.length
+        ? snippets.map((s) => `• ${s.title}: ${s.excerpt.slice(0, 120)}...`).join("\n")
+        : "No se encontraron materiales relacionados.";
+      return new OperationResult(true, message, { materials: snippets });
+    },
+  },
+
+  explain_course_topic: {
+    description:
+      "Explica un tema del curso basándose en los materiales compartidos por el docente. Busca contenido relevante y genera una explicación.",
+    parameters: {
+      type: "object",
+      properties: {
+        topic: { type: "string", description: "Tema o pregunta del estudiante" },
+        course_id: { type: "number", description: "ID del curso (opcional)" },
+      },
+      required: ["topic"],
+    },
+    handler: async (args, userId, userRole = "student") => {
+      const { topic, course_id } = args;
+      if (!topic?.trim()) return new OperationResult(false, "topic es requerido");
+
+      const searchResult = course_id
+        ? await courseMaterialService.searchCourseContent(Number(course_id), topic, userId, userRole, 5)
+        : await courseMaterialService.searchAcrossEnrolledCourses(topic, userId, 5);
+
+      if (!searchResult.success) return searchResult;
+
+      const materials = searchResult.data?.materials || [];
+      if (!materials.length) {
+        return new OperationResult(
+          false,
+          "No hay materiales del curso relacionados con ese tema. Pide al docente que comparta recursos."
+        );
+      }
+
+      const contextBlock = materials
+        .map((m, i) => `[Material ${i + 1}: ${m.title}]\n${(m.content || "").slice(0, 3000)}`)
+        .join("\n\n---\n\n");
+
+      try {
+        const response = await createChatCompletion({
+          model: MODEL_STUDY,
+          messages: [
+            {
+              role: "system",
+              content:
+                "Eres un tutor académico. Responde SOLO con base en los materiales del curso proporcionados. " +
+                "Si el material no cubre el tema, indícalo claramente. Responde en español de forma clara y didáctica.",
+            },
+            {
+              role: "user",
+              content: `Pregunta del estudiante: ${topic}\n\nMATERIALES DEL CURSO:\n${contextBlock}`,
+            },
+          ],
+          temperature: 0.4,
+          max_tokens: 2048,
+        }, { purpose: "study" });
+
+        const explanation = response.choices?.[0]?.message?.content?.trim();
+        if (!explanation) {
+          return new OperationResult(false, "No se pudo generar la explicación.");
+        }
+
+        return new OperationResult(true, explanation, {
+          topic,
+          sources: materials.map((m) => ({ id: m.id, title: m.title, courseId: m.courseId })),
+        });
+      } catch (error) {
+        return new OperationResult(false, `Error al explicar el tema: ${error.message}`);
+      }
+    },
+  },
+
+  create_course_material: {
+    description: "Crea un material/recurso de estudio para un curso (texto compartido con estudiantes).",
+    parameters: {
+      type: "object",
+      properties: {
+        course_id: { type: "number", description: "ID del curso" },
+        title: { type: "string", description: "Título del material" },
+        content: { type: "string", description: "Contenido textual del material" },
+        file_path: { type: "string", description: "Ruta de archivo opcional" },
+      },
+      required: ["course_id", "title", "content"],
+    },
+    handler: async (args, userId, userRole = "teacher") => {
+      const result = await courseMaterialService.createMaterial(
+        {
+          course_id: Number(args.course_id),
+          title: args.title,
+          content: args.content,
+          file_path: args.file_path,
+        },
+        userId,
+        userRole
+      );
+      return wrapResult("create_course_material", result);
+    },
+  },
+
+  // ════════════════════════════════════════════════════════════════════════════
   // STUDENT — Statistics
   // ════════════════════════════════════════════════════════════════════════════
 
@@ -1351,7 +1720,7 @@ export const executeTool = async ({ name, args, userId, userRole = "student" }) 
   const TEACHER_ONLY_TOOLS = new Set([
     "get_teacher_courses", "get_course_analytics", "get_at_risk_students",
     "generate_grade_report", "generate_question_bank", "generate_rubric",
-    "generate_course_plan",
+    "generate_course_plan", "create_course_material",
   ]);
   if (TEACHER_ONLY_TOOLS.has(name) && userRole !== "teacher") {
     return new OperationResult(false, "Esta herramienta solo está disponible para docentes.");

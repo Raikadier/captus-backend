@@ -256,10 +256,18 @@ export class TaskService {
       if (!userId) return new OperationResult(false, "Usuario no autenticado.");
 
       const includeCompleted = Boolean(options.includeCompleted);
+      const excludeOverdue = Boolean(options.excludeOverdue);
       const limit = options.limit || 10;
+      const now = new Date();
 
       const tasks = await this.taskRepository.getAllByUserId(userId);
-      const filtered = includeCompleted ? tasks : tasks.filter((task) => !task.state && !task.completed);
+      let filtered = includeCompleted ? tasks : tasks.filter((task) => !task.state && !task.completed);
+
+      if (excludeOverdue) {
+        filtered = filtered.filter(
+          (task) => !task.due_date || new Date(task.due_date) >= now
+        );
+      }
 
       // Order by due_date ascending when present
       filtered.sort((a, b) => {

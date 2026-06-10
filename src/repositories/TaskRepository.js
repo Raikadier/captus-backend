@@ -12,6 +12,8 @@ const mapFromDb = (row) => ({
   completed: row.completed,
   user_id: row.user_id,
   updated_at: row.updated_at,
+  complexity: row.complexity ?? 3,
+  estimated_hours: row.estimated_hours ?? 1,
   // Keeping legacy properties for safety if backend logic relies on them
   id_Task: row.id,
   state: row.completed,
@@ -33,6 +35,8 @@ const mapToDb = (entity) => ({
   completed: entity.completed ?? entity.state ?? false,
   user_id: entity.user_id ?? entity.id_User,
   project_id: entity.project_id, // New field
+  complexity: entity.complexity ?? 3,
+  estimated_hours: entity.estimated_hours ?? 1,
 });
 
 class TaskRepository extends BaseRepository {

@@ -48,6 +48,8 @@ CREATE TABLE public.course_assignments (
   description text,
   due_date timestamp with time zone NOT NULL,
   is_group_assignment boolean DEFAULT false,
+  complexity integer NOT NULL DEFAULT 3,
+  estimated_hours numeric NOT NULL DEFAULT 2.0,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT course_assignments_pkey PRIMARY KEY (id),
@@ -94,6 +96,19 @@ CREATE TABLE public.courses (
   CONSTRAINT courses_pkey PRIMARY KEY (id),
   CONSTRAINT courses_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.users(id),
   CONSTRAINT courses_subject_id_fkey FOREIGN KEY (subject_id) REFERENCES public.subjects(id)
+);
+CREATE TABLE public.course_materials (
+  id integer NOT NULL DEFAULT nextval('course_materials_id_seq'::regclass),
+  course_id integer NOT NULL,
+  title character varying NOT NULL,
+  content text,
+  file_path character varying,
+  uploaded_by uuid NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT course_materials_pkey PRIMARY KEY (id),
+  CONSTRAINT course_materials_course_id_fkey FOREIGN KEY (course_id) REFERENCES public.courses(id),
+  CONSTRAINT course_materials_uploaded_by_fkey FOREIGN KEY (uploaded_by) REFERENCES public.users(id)
 );
 CREATE TABLE public.diagrams (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -321,6 +336,8 @@ CREATE TABLE public.tasks (
   due_date timestamp with time zone NOT NULL,
   priority_id integer NOT NULL,
   category_id integer,
+  complexity integer NOT NULL DEFAULT 3,
+  estimated_hours numeric NOT NULL DEFAULT 1.0,
   completed boolean DEFAULT false,
   user_id uuid NOT NULL,
   updated_at timestamp with time zone DEFAULT now(),

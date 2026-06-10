@@ -3,12 +3,16 @@ import { NotesService } from "../services/NotesService.js";
 import { EventsService } from "../services/EventsService.js";
 import EventsRepository from "../repositories/EventsRepository.js";
 import CourseService from "../services/CourseService.js";
+import AdvisoryService from "../services/AdvisoryService.js";
+import SubmissionService from "../services/SubmissionService.js";
 
 const taskService = new TaskService();
 const notesService = new NotesService();
 // FIX: EventsService requires repository injection
 const eventsService = new EventsService(new EventsRepository());
 const courseService = new CourseService();
+const advisoryService = new AdvisoryService();
+const submissionService = new SubmissionService();
 
 /**
  * Pre-fetches lightweight context for a given intent so the orchestrator
@@ -25,21 +29,24 @@ export const fetchContextForIntent = async (intent, userId, userRole = "student"
     switch (intent) {
       case "tasks": {
         const tasks = await taskService.getTasksForAi(
-          { includeCompleted: false, limit: 10 },
+          { includeCompleted: false, excludeOverdue: true, limit: 10 },
           { id: userId }
         );
         if (!tasks.success) return "Error cargando tareas.";
         if (!tasks.data?.length) return "El usuario no tiene tareas pendientes.";
-        return tasks.data
-          .map(
-            (t) =>
-              `- [${t.id}] ${t.title} (${
-                t.due_date
-                  ? new Date(t.due_date).toLocaleDateString("es-ES")
-                  : "sin fecha"
-              })${t.completed ? " ✅" : ""}`
-          )
-          .join("\n");
+        return (
+          "TAREAS PENDIENTES (sin vencidas):\n" +
+          tasks.data
+            .map(
+              (t) =>
+                `- [${t.id}] ${t.title} (${
+                  t.due_date
+                    ? new Date(t.due_date).toLocaleDateString("es-ES")
+                    : "sin fecha"
+                }) | Prioridad: ${t.priority_id ?? 1} | Complejidad: ${t.complexity ?? 3}/5 | Tiempo est.: ${t.estimated_hours ?? 1}h`
+            )
+            .join("\n")
+        );
       }
 
       case "notes": {
@@ -99,31 +106,25 @@ export const fetchContextForIntent = async (intent, userId, userRole = "student"
       }
 
       case "assignments": {
-        // Get student courses first, then pending assignments
-        const courses = await courseService.getCoursesForUser(userId, userRole);
-        const courseList = Array.isArray(courses) ? courses : courses?.data ?? [];
-        if (!courseList.length) return "No tienes cursos activos, no hay asignaciones.";
-
-        const AssignmentService = (await import("../services/AssignmentService.js")).default;
-        const assignmentService = new AssignmentService();
-
-        const allAssignments = [];
-        for (const course of courseList.slice(0, 5)) {
-          try {
-            const result = await assignmentService.getAssignmentsByCourse(course.id, userId, userRole);
-            const list = Array.isArray(result) ? result : result?.data ?? [];
-            allAssignments.push(...list.map(a => ({ ...a, courseName: course.name || course.title })));
-          } catch { /* skip */ }
+        try {
+          const pending = await submissionService.getPendingAssignmentsForStudent(userId);
+          if (!pending.length) return "No tienes entregas pendientes (sin vencidas).";
+          return (
+            "ENTREGAS PENDIENTES (sin vencidas):\n" +
+            pending.slice(0, 10).map(a =>
+              `- [${a.id}] ${a.title} | Curso: ${a.course_id} | Vence: ${a.due_date ? new Date(a.due_date).toLocaleDateString("es-ES") : "sin fecha"} | Complejidad: ${a.complexity ?? 3}/5 | Tiempo est.: ${a.estimated_hours ?? 2}h`
+            ).join("\n")
+          );
+        } catch {
+          return "No se pudieron cargar las entregas pendientes.";
         }
+      }
 
-        if (!allAssignments.length) return "No tienes asignaciones pendientes.";
-
-        return (
-          "ASIGNACIONES/ENTREGAS:\n" +
-          allAssignments.slice(0, 10).map(a =>
-            `- [${a.id}] ${a.title} | Curso: ${a.courseName} | Vence: ${a.due_date ? new Date(a.due_date).toLocaleDateString("es-ES") : "sin fecha"}`
-          ).join("\n")
-        );
+      case "advisory": {
+        const result = await advisoryService.prioritizeWorkload(userId, { limit: 8 });
+        if (!result.success) return "No se pudo calcular la priorización.";
+        if (!result.data?.items?.length) return "No hay tareas ni entregas pendientes para priorizar.";
+        return "PRIORIZACIÓN RECOMENDADA:\n" + result.message;
       }
 
       case "stats": {

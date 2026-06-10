@@ -54,6 +54,8 @@ const _TaskFields = z.object({
   priority_id: z.number().int().positive().optional(),
   category_id: z.number().int().positive().optional(),
   status:      z.enum(STATUSES).optional(),
+  complexity: z.number().int().min(1).max(5).optional(),
+  estimated_hours: z.number().positive().optional(),
   dueDate:     optionalFlexibleDate,
   due_date:    optionalFlexibleDate,
   completed:   z.boolean().optional(),

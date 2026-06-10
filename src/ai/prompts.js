@@ -10,6 +10,7 @@
  *    study       → study a document: flashcards, quiz, summary, concepts
  *    courses     → list enrolled courses, course activities, materials, teacher
  *    assignments → pending assignments, submissions, due dates
+ *    advisory      → prioritize workload by due date, complexity, estimated hours
  *    general     → conversation, tutoring, anything else
  *
  *  Teacher intents:
@@ -27,6 +28,7 @@ const INTENT_CONTEXT = {
   study:             "[CTX_ESTUDIO]",
   courses:           "[CTX_CURSOS]",
   assignments:       "[CTX_ENTREGAS]",
+  advisory:          "[CTX_ASESORAMIENTO]",
   stats:             "[CTX_ESTADISTICAS]",
   teacher_analytics: "[CTX_ANALITICA_DOCENTE]",
   teacher_content:   "[CTX_CONTENIDO_DOCENTE]",
@@ -48,12 +50,12 @@ Responde ÚNICAMENTE un JSON con este formato exacto:
 
 INTENTS VÁLIDOS Y CUÁNDO USARLOS:
 - tasks: crear/listar/completar/actualizar tareas o subtareas
-- notes: crear/listar/editar notas o apuntes
-- events: crear/listar/editar eventos o calendario
+- notes: crear/listar/editar/eliminar notas o apuntes
+- events: crear/listar/editar/eliminar eventos o calendario
 - study: estudiar un documento, crear flashcards, quiz, resumen, mapa conceptual
-- courses: consultar materias/cursos en los que está inscrito el estudiante,
-  actividades de un curso, materiales, docente del curso
+- courses: consultar materias/cursos, materiales compartidos, explicar temas del curso, grupos de trabajo
 - assignments: consultar entregas pendientes, ver asignaciones de un curso, estado de una entrega
+- advisory: priorizar qué tarea o entrega hacer primero según fecha, complejidad y tiempo estimado (sin vencidas)
 - stats: consultar estadísticas personales del estudiante — racha, tareas completadas,
   porcentaje de éxito, progreso semanal, logros
 - teacher_analytics: el docente consulta estadísticas, calificaciones, alumnos en
@@ -103,7 +105,8 @@ MODO DOCENTE ACTIVO:
       : `
 MODO ESTUDIANTE ACTIVO:
 - Dirígete al usuario por su nombre (${userName ?? "estudiante"}) cuando sea natural.
-- Ayuda a gestionar tareas, estudiar documentos y planificar el semestre.
+- Ayuda a gestionar tareas, diagramas, estudiar documentos y planificar el semestre.
+- Para priorizar trabajo usa prioritize_workload; para explicar temas del curso usa explain_course_topic.
 - Sé conciso, claro y motivador.`;
 
   return `
