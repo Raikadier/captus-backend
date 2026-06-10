@@ -84,21 +84,21 @@ export class TaskController {
     if (!req.user || !req.user.id) return res.status(401).json({ success: false, message: "Unauthorized" });
     const { id } = req.params;
     const taskData = { ...req.body, id_Task: parseInt(id) };
-    const result = await this.taskService.update(taskData);
+    const result = await this.taskService.update(taskData, req.user);
     res.status(result.success ? 200 : 400).json(result);
   }
 
   async delete(req, res) {
     if (!req.user || !req.user.id) return res.status(401).json({ success: false, message: "Unauthorized" });
     const { id } = req.params;
-    const result = await this.taskService.delete(parseInt(id));
+    const result = await this.taskService.delete(parseInt(id), req.user);
     res.status(result.success ? 200 : 400).json(result);
   }
 
   async complete(req, res) {
     if (!req.user || !req.user.id) return res.status(401).json({ success: false, message: "Unauthorized" });
     const { id } = req.params;
-    const result = await this.taskService.complete(parseInt(id));
+    const result = await this.taskService.complete(parseInt(id), req.user);
 
     if (result.success) {
       // Validar logros relacionados con completar tareas

@@ -10,7 +10,7 @@ const optionalIsoDate = isoDate.optional();
 const flexibleDate = z
   .string()
   .refine((s) => !Number.isNaN(Date.parse(s)), { message: 'Debe ser una fecha válida.' });
-const optionalFlexibleDate = flexibleDate.optional();
+const optionalFlexibleDate = flexibleDate.nullable().optional();
 const shortStr  = (label) => z.string({ required_error: `${label} es requerido.` }).min(1, `${label} no puede estar vacío.`).max(255);
 const longStr   = (label) => z.string({ required_error: `${label} es requerido.` }).min(1).max(5000);
 
@@ -46,7 +46,7 @@ const STATUSES   = ['pending', 'in_progress', 'completed'];
 // Normalises to snake_case before the service layer sees it.
 const _TaskFields = z.object({
   title:       shortStr('El título'),
-  description: z.string().max(2000).optional(),
+  description: z.string().max(2000).nullable().optional(),
   priority:    z.enum(PRIORITIES, { message: `Prioridad debe ser: ${PRIORITIES.join(', ')}.` }).optional(),
   // The web client sends priority_id / category_id as integers (FK to priorities/categories
   // tables). Accept both the numeric FK form and the legacy string form so neither

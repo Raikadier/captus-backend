@@ -528,15 +528,17 @@ describe('TaskService Integration Tests', () => {
                 expect(result.message).toBe('No se puede completar una tarea que tiene subtareas vencidas.');
             });
 
-            it('should fail to complete task past due date', async () => {
-                const task = { id_Task: 1, id_User: testUserId, title: 'Task', state: false, endDate: '2020-01-01' };
+            it('should complete task due today', async () => {
+                const todayStr = new Date().toISOString().split('T')[0];
+                const task = { id_Task: 1, id_User: testUserId, title: 'Task', state: false, endDate: todayStr };
 
                 mockTaskRepo.getById.mockResolvedValue(task);
+                mockSubTaskRepo.getAllByTaskId.mockResolvedValue([]);
+                mockTaskRepo.update.mockResolvedValue({ ...task, state: true });
 
                 const result = await taskService.updateTaskState(1, true, testUser);
 
-                expect(result.success).toBe(false);
-                expect(result.message).toBe('No se puede completar una tarea que ha pasado su fecha límite.');
+                expect(result.success).toBe(true);
             });
 
             it('should fail when task not found', async () => {

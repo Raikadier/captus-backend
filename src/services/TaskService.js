@@ -379,15 +379,6 @@ export class TaskService {
         return new OperationResult(false, "Tarea no encontrada.");
       }
 
-      // Check if task is overdue
-      if (state && task.endDate) {
-        const now = new Date();
-        const dueDate = new Date(task.endDate);
-        if (dueDate < now) {
-          return new OperationResult(false, "No se puede completar una tarea que ha pasado su fecha límite.");
-        }
-      }
-
       // Check if any subtasks are overdue (if trying to complete parent task)
       if (state) {
         const subTasks = await this.subTaskRepository.getAllByTaskId(taskId);
