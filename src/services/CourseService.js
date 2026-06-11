@@ -40,12 +40,11 @@ export default class CourseService {
       }));
     } else {
       const enrollments = await this.courseRepo.findByStudent(userId);
-      // Transform data for student view
-      return enrollments.map(item => ({
+      return enrollments.map((item) => ({
         ...item.courses,
         professor: item.courses?.teacher?.name || 'Profesor',
-        progress: 0,
-        enrolled_at: item.enrolled_at
+        progress: item.progress ?? 0,
+        enrolled_at: item.enrolled_at,
       }));
     }
   }

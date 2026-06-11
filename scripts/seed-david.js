@@ -1,4 +1,7 @@
 /**
+ * @deprecated Use scripts/reset-and-seed-david-year.js instead.
+ *             That script cleans David's data and seeds a full UPC academic year.
+ *
  * Seed script for David Santiago Barcelo Teran (davidbarcelo0411@gmail.com)
  *
  * Simulates an active university student at UNAL:

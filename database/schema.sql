@@ -60,6 +60,7 @@ CREATE TABLE public.course_enrollments (
   course_id integer NOT NULL,
   student_id uuid NOT NULL,
   enrolled_at timestamp with time zone DEFAULT now(),
+  progress integer NOT NULL DEFAULT 0,
   CONSTRAINT course_enrollments_pkey PRIMARY KEY (id),
   CONSTRAINT course_enrollments_course_id_fkey FOREIGN KEY (course_id) REFERENCES public.courses(id),
   CONSTRAINT course_enrollments_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.users(id)

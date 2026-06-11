@@ -27,6 +27,7 @@ export default class CourseRepository extends BaseRepository {
       .select(`
         course_id,
         enrolled_at,
+        progress,
         courses:course_id (
           *,
           teacher:teacher_id (
