@@ -9,7 +9,7 @@ import {
 
 describe('allowedIntents', () => {
   const EXPECTED = [
-    'tasks', 'notes', 'events', 'study', 'courses', 'assignments', 'advisory', 'stats',
+    'tasks', 'notes', 'events', 'study', 'courses', 'assignments', 'grades', 'advisory', 'stats',
     'teacher_analytics', 'teacher_content',
     'notifications', 'general',
   ];
@@ -35,6 +35,7 @@ describe('resolveContextPrefix', () => {
     expect(resolveContextPrefix('study')).toBe('[CTX_ESTUDIO]');
     expect(resolveContextPrefix('courses')).toBe('[CTX_CURSOS]');
     expect(resolveContextPrefix('assignments')).toBe('[CTX_ENTREGAS]');
+    expect(resolveContextPrefix('grades')).toBe('[CTX_CALIFICACIONES]');
     expect(resolveContextPrefix('advisory')).toBe('[CTX_ASESORAMIENTO]');
     expect(resolveContextPrefix('stats')).toBe('[CTX_ESTADISTICAS]');
     expect(resolveContextPrefix('teacher_analytics')).toBe('[CTX_ANALITICA_DOCENTE]');

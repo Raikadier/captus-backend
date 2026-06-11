@@ -1447,8 +1447,68 @@ export const toolRegistry = {
     },
   },
 
+  list_my_grades: {
+    description:
+      "Lista las calificaciones del estudiante por entrega de curso: nota, retroalimentación y estado (entregado, pendiente de calificar, sin entregar). Opcionalmente filtra por curso o solo entregas ya calificadas.",
+    parameters: {
+      type: "object",
+      properties: {
+        course_id: { type: "number", description: "ID del curso (opcional). Si se omite, incluye todos los cursos inscritos." },
+        graded_only: { type: "boolean", description: "Si es true, solo devuelve entregas que ya tienen nota." },
+      },
+    },
+    handler: async (args, userId) => {
+      try {
+        const rows = await submissionService.getStudentGrades(userId, {
+          courseId: args?.course_id ? Number(args.course_id) : null,
+          gradedOnly: Boolean(args?.graded_only),
+        });
+
+        if (!rows.length) {
+          const scope = args?.graded_only ? "calificadas" : "registradas";
+          return new OperationResult(
+            true,
+            `No tienes entregas ${scope} en tus cursos.`,
+            { grades: [] }
+          );
+        }
+
+        const formatRow = (r) => {
+          let status;
+          if (!r.submitted) status = "Sin entregar";
+          else if (!r.graded) status = "Entregado — pendiente de calificar";
+          else status = `Calificado: ${r.grade}`;
+
+          return (
+            `• [${r.assignment_id}] ${r.assignment_title} | Curso: ${r.course_name}` +
+            ` | ${status}` +
+            (r.feedback ? ` | Retroalimentación: ${r.feedback}` : "")
+          );
+        };
+
+        const graded = rows.filter((r) => r.graded && r.grade != null);
+        const avg =
+          graded.length > 0
+            ? (graded.reduce((s, r) => s + Number(r.grade), 0) / graded.length).toFixed(2)
+            : null;
+
+        const header =
+          avg != null
+            ? `📊 Calificaciones (${rows.length} entregas, promedio calificadas: ${avg}):\n`
+            : `📊 Entregas y calificaciones (${rows.length}):\n`;
+
+        return new OperationResult(true, header + rows.map(formatRow).join("\n"), {
+          grades: rows,
+          average_graded: avg != null ? Number(avg) : null,
+        });
+      } catch (e) {
+        return new OperationResult(false, `Error al obtener calificaciones: ${e.message}`);
+      }
+    },
+  },
+
   get_submission_status: {
-    description: "Consulta si el estudiante ya entregó una asignación y muestra el estado de la entrega.",
+    description: "Consulta si el estudiante ya entregó una asignación, su nota y retroalimentación del docente.",
     parameters: {
       type: "object",
       properties: {

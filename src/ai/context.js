@@ -120,6 +120,32 @@ export const fetchContextForIntent = async (intent, userId, userRole = "student"
         }
       }
 
+      case "grades": {
+        try {
+          const rows = await submissionService.getStudentGrades(userId, { gradedOnly: false });
+          const graded = rows.filter((r) => r.graded && r.grade != null);
+          if (!rows.length) return "No tienes entregas registradas en tus cursos.";
+          const avg =
+            graded.length > 0
+              ? (graded.reduce((s, r) => s + Number(r.grade), 0) / graded.length).toFixed(2)
+              : null;
+          const lines = rows.slice(0, 12).map((r) => {
+            const status = !r.submitted
+              ? "Sin entregar"
+              : !r.graded
+                ? "Pendiente de calificar"
+                : `Nota: ${r.grade}`;
+            return `- [${r.assignment_id}] ${r.assignment_title} (${r.course_name}) | ${status}`;
+          });
+          return (
+            `CALIFICACIONES POR ENTREGA${avg != null ? ` | Promedio: ${avg}` : ""}:\n` +
+            lines.join("\n")
+          );
+        } catch {
+          return "No se pudieron cargar las calificaciones.";
+        }
+      }
+
       case "advisory": {
         const result = await advisoryService.prioritizeWorkload(userId, { limit: 8 });
         if (!result.success) return "No se pudo calcular la priorización.";

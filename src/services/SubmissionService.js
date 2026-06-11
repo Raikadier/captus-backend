@@ -220,6 +220,64 @@ export default class SubmissionService {
         };
     }
 
+    async getStudentGrades(userId, options = {}) {
+        const { courseId = null, gradedOnly = false } = options;
+
+        const client = requireSupabaseClient();
+        const { data: enrollments, error } = await client
+            .from('course_enrollments')
+            .select('course_id')
+            .eq('student_id', userId);
+
+        if (error) throw new Error(error.message);
+
+        let courseIds = (enrollments || []).map((e) => e.course_id);
+        if (courseId) {
+            if (!courseIds.includes(Number(courseId))) {
+                throw new Error('No estás inscrito en este curso');
+            }
+            courseIds = [Number(courseId)];
+        }
+
+        const rows = [];
+
+        for (const cid of courseIds) {
+            const course = await this.courseRepo.getById(cid);
+            const assignments = await this.assignmentRepo.findByCourse(cid);
+
+            for (const assignment of assignments) {
+                const submission = await this.getSubmissions(assignment.id, userId, 'student');
+                const submitted = Boolean(submission);
+                const graded = Boolean(submission?.graded);
+                const grade = submission?.grade ?? null;
+
+                if (gradedOnly && !graded) continue;
+
+                rows.push({
+                    assignment_id: assignment.id,
+                    assignment_title: assignment.title,
+                    course_id: cid,
+                    course_name: course?.title ?? `Curso ${cid}`,
+                    due_date: assignment.due_date,
+                    submitted,
+                    graded,
+                    grade,
+                    feedback: submission?.feedback ?? null,
+                    submitted_at: submission?.submitted_at ?? null,
+                    is_group_assignment: assignment.is_group_assignment,
+                });
+            }
+        }
+
+        rows.sort((a, b) => {
+            const da = a.due_date ? new Date(a.due_date) : 0;
+            const db = b.due_date ? new Date(b.due_date) : 0;
+            return db - da;
+        });
+
+        return rows;
+    }
+
     async getPendingAssignmentsForStudent(userId) {
         const client = requireSupabaseClient();
         const { data: enrollments, error } = await client

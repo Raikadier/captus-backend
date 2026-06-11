@@ -10,6 +10,7 @@
  *    study       → study a document: flashcards, quiz, summary, concepts
  *    courses     → list enrolled courses, course activities, materials, teacher
  *    assignments → pending assignments, submissions, due dates
+ *    grades        → course assignment grades, feedback, averages
  *    advisory      → prioritize workload by due date, complexity, estimated hours
  *    general     → conversation, tutoring, anything else
  *
@@ -28,6 +29,7 @@ const INTENT_CONTEXT = {
   study:             "[CTX_ESTUDIO]",
   courses:           "[CTX_CURSOS]",
   assignments:       "[CTX_ENTREGAS]",
+  grades:            "[CTX_CALIFICACIONES]",
   advisory:          "[CTX_ASESORAMIENTO]",
   stats:             "[CTX_ESTADISTICAS]",
   teacher_analytics: "[CTX_ANALITICA_DOCENTE]",
@@ -55,6 +57,7 @@ INTENTS VÁLIDOS Y CUÁNDO USARLOS:
 - study: estudiar un documento, crear flashcards, quiz, resumen, mapa conceptual
 - courses: consultar materias/cursos, materiales compartidos, explicar temas del curso, grupos de trabajo
 - assignments: consultar entregas pendientes, ver asignaciones de un curso, estado de una entrega
+- grades: consultar calificaciones por entrega de curso, notas, retroalimentación del docente y promedio
 - advisory: priorizar qué tarea o entrega hacer primero según fecha, complejidad y tiempo estimado (sin vencidas)
 - stats: consultar estadísticas personales del estudiante — racha, tareas completadas,
   porcentaje de éxito, progreso semanal, logros
@@ -106,7 +109,7 @@ MODO DOCENTE ACTIVO:
 MODO ESTUDIANTE ACTIVO:
 - Dirígete al usuario por su nombre (${userName ?? "estudiante"}) cuando sea natural.
 - Ayuda a gestionar tareas, diagramas, estudiar documentos y planificar el semestre.
-- Para priorizar trabajo usa prioritize_workload; para explicar temas del curso usa explain_course_topic.
+- Para priorizar trabajo usa prioritize_workload; para calificaciones usa list_my_grades; para explicar temas del curso usa explain_course_topic.
 - Sé conciso, claro y motivador.`;
 
   return `

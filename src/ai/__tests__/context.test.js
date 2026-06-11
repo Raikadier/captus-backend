@@ -15,6 +15,7 @@ const mockNotesGetAll = jest.fn();
 const mockEventsGetUpcoming = jest.fn();
 const mockGetCoursesForUser = jest.fn();
 const mockGetPendingAssignments = jest.fn();
+const mockGetStudentGrades = jest.fn();
 const mockPrioritizeWorkload = jest.fn();
 
 jest.unstable_mockModule("../../services/TaskService.js", () => ({
@@ -26,7 +27,10 @@ jest.unstable_mockModule("../../services/NotesService.js", () => ({
 }));
 
 jest.unstable_mockModule("../../services/SubmissionService.js", () => ({
-  default: jest.fn(() => ({ getPendingAssignmentsForStudent: mockGetPendingAssignments })),
+  default: jest.fn(() => ({
+    getPendingAssignmentsForStudent: mockGetPendingAssignments,
+    getStudentGrades: mockGetStudentGrades,
+  })),
 }));
 
 jest.unstable_mockModule("../../services/AdvisoryService.js", () => ({
@@ -175,6 +179,36 @@ describe("fetchContextForIntent — assignments", () => {
     const result = await fetchContextForIntent("assignments", USER_ID);
     expect(result).toContain("ENTREGAS PENDIENTES");
     expect(result).toContain("Taller 1");
+  });
+});
+
+describe("fetchContextForIntent — grades", () => {
+  beforeEach(() => mockGetStudentGrades.mockReset());
+
+  it("returns grades formatted string with average", async () => {
+    mockGetStudentGrades.mockResolvedValueOnce([
+      {
+        assignment_id: 1,
+        assignment_title: "Parcial 1",
+        course_name: "Cálculo",
+        submitted: true,
+        graded: true,
+        grade: 4.2,
+      },
+      {
+        assignment_id: 2,
+        assignment_title: "Taller 2",
+        course_name: "Cálculo",
+        submitted: true,
+        graded: false,
+        grade: null,
+      },
+    ]);
+    const result = await fetchContextForIntent("grades", USER_ID);
+    expect(result).toContain("CALIFICACIONES POR ENTREGA");
+    expect(result).toContain("Parcial 1");
+    expect(result).toContain("Nota: 4.2");
+    expect(result).toContain("Pendiente de calificar");
   });
 });
 
